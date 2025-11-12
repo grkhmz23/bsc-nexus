@@ -129,7 +129,7 @@ export async function getTokenBalance(
     const contract = new web3.eth.Contract(ERC20_ABI as any, tokenAddress);
     const balance = await contract.methods.balanceOf(holderAddress).call();
     
-    return balance.toString();
+    return balance ? String(balance) : '0';
   } catch (error: any) {
     logger.error('Failed to fetch token balance', {
       tokenAddress,

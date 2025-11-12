@@ -87,14 +87,4 @@ router.post('/v1/rpc', requireApiKey, async (req: AuthenticatedRequest, res: Res
     res.status(500).json(errorResponse);
   }
 });
-
-/**
- * POST /rpc - Legacy endpoint (redirects to /v1/rpc)
- */
-router.post('/rpc', requireApiKey, async (req: AuthenticatedRequest, res: Response) => {
-  // Forward to the new endpoint
-  req.url = '/v1/rpc';
-  router.handle(req, res);
-});
-
 export default router;
