@@ -37,8 +37,7 @@ jobs:
         PORT=3000
         UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org
         ADMIN_TOKEN=test-admin-token
-        NODE_ENV=test
-        API_KEYS=dev-key-123:TestKey,another-key:AnotherKey
+        NODE_ENV=development
         EOF
     
     - name: Start server in background
@@ -93,7 +92,7 @@ jobs:
           -p 3000:3000 \
           -e UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org \
           -e ADMIN_TOKEN=test-token \
-          -e API_KEYS=dev-key-123:TestKey \
+          -e NODE_ENV=development \
           bsc-nexus:test
         sleep 10
         curl http://localhost:3000/health
