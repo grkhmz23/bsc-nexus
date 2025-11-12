@@ -33,10 +33,13 @@ jobs:
     
     - name: Create .env file
       run: |
-        echo "PORT=3000" > .env
-        echo "UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org" >> .env
-        echo "ADMIN_TOKEN=test-admin-token" >> .env
-        echo "NODE_ENV=test" >> .env
+        cat > .env << 'EOF'
+        PORT=3000
+        UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org
+        ADMIN_TOKEN=test-admin-token
+        NODE_ENV=test
+        API_KEYS=dev-key-123:TestKey,another-key:AnotherKey
+        EOF
     
     - name: Start server in background
       run: |
@@ -90,6 +93,7 @@ jobs:
           -p 3000:3000 \
           -e UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org \
           -e ADMIN_TOKEN=test-token \
+          -e API_KEYS=dev-key-123:TestKey \
           bsc-nexus:test
         sleep 10
         curl http://localhost:3000/health
