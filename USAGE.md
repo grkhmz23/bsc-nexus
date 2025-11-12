@@ -1,216 +1,188 @@
-# BSC Nexus QA Suite - Quick Start Guide
+BSC Nexus – Technical Developer Guide
+1. Overview
 
-## 🎯 What You Have
+This document provides technical instructions for setting up, running, testing, and extending the BSC Nexus quality assurance and RPC infrastructure framework.
+It is intended for developers, auditors, and contributors who wish to verify the system locally or integrate new backend endpoints into the QA suite.
 
-You now have a **comprehensive automated QA testing suite** that validates all features of the BSC Nexus backend platform.
+The repository:
+https://github.com/grkhmz23/BSC-Nexus
 
-## ✅ What's Included
+2. Project Objectives
 
-### Test Coverage
-- ✅ Health & Metrics endpoints
-- ✅ JSON-RPC Proxy (BSC mainnet)
-- ✅ Token Information API
-- ✅ GraphQL queries
-- ✅ WebSocket subscriptions
-- ✅ Webhook lifecycle (create/test/delete)
-- ✅ Security & authentication
-- ✅ Database & indexer validation
+BSC Nexus is designed to:
 
-### Test Features
-- Automated execution of all tests
-- Color-coded console output
-- Detailed error messages
-- Actionable fix suggestions
-- Beautiful HTML reports
-- Performance metrics
+Provide a reproducible environment for backend quality testing.
 
-## 🚀 How to Use
+Validate reliability and response accuracy of blockchain-related endpoints.
 
-### Step 1: Configure the Test Suite
+Offer a unified framework for testing, reporting, and integration with live Binance Smart Chain RPC nodes.
 
-Copy the example environment file:
-```bash
-cp .env.example .env
-```
+The project includes:
 
-Edit `.env` and set your BSC Nexus server details:
-```env
-SERVER_URL=http://localhost:3000
-API_KEY=dev-key-123
-ADMIN_TOKEN=admin
-```
+A mock backend (mock-server.mjs) simulating core endpoints.
 
-### Step 2: Ensure BSC Nexus is Running
+A test runner (test-runner.ts) executing automated checks.
 
-**IMPORTANT**: The QA suite needs a running BSC Nexus server to test.
+Independent test modules for each endpoint category.
 
-#### Option A: Local Server (Recommended for Development)
-```bash
-cd bsc-nexus
+3. Prerequisites
+
+Before setup, ensure that the following software is installed:
+
+Requirement	Version	Purpose
+Node.js	18.x or higher	Runtime environment
+npm	9.x or higher	Package manager
+Git	Latest	Repository management
+4. Setup and Installation
+4.1 Clone the Repository
+git clone https://github.com/grkhmz23/BSC-Nexus.git
+cd BSC-Nexus
+
+4.2 Install Dependencies
 npm install
-docker compose up -d db redis
-npm run prisma:migrate
-npm run dev
-```
 
-#### Option B: Remote Server
-Point `SERVER_URL` in `.env` to your deployed BSC Nexus instance.
+4.3 Configure Environment
 
-### Step 3: Run the Tests
+Duplicate .env.example and rename it to .env, or create a new .env file manually.
 
-```bash
+Example configuration:
+
+SERVER_URL=https://potential-telegram-g4454grx77rw3x9x.github.dev
+WS_URL=wss://potential-telegram-g4454grx77rw3x9x.github.dev
+DATABASE_URL=postgres://user:password@localhost:5432/bsc_nexus
+BSC_RPC_URL=https://bsc-dataseed.binance.org
+
+5. Running the Backend
+
+The mock backend simulates live endpoints used by the QA suite.
+
+Start it with:
+
+node mock-server.mjs
+
+
+Expected output:
+
+✅ Mock BSC Nexus backend running on http://localhost:3000
+
+
+The backend will expose the following endpoints:
+
+Endpoint	Method	Description
+/health	GET	Basic service health check
+/rpc	POST	Mock JSON-RPC endpoint (used in QA tests)
+6. Running the QA Test Suite
+
+To execute the full test suite:
+
 npm test
-```
 
-### Step 4: View Results
 
-- **Console**: Colored output with ✅/❌ indicators
-- **HTML Report**: Open `test-report.html` in your browser
+This will automatically run:
 
-## 📊 Understanding Results
+Health checks
 
-### Test Status Indicators
+RPC proxy tests
 
-- ✅ **Green checkmark** = Test passed
-- ❌ **Red X** = Test failed
-- 💡 **Blue lightbulb** = Fix suggestion
-- ⚠️ **Yellow warning** = Error details
+Token RPC verification (connected to live BSC node)
 
-### Example Output
+At the end of execution, the script generates a detailed HTML report:
 
-```
-▶ Running Health Checks tests...
-  ✅ GET /health endpoint (15ms)
-     ℹ Health check returned { ok: true }
-  
-  ✅ GET /metrics endpoint (8ms)
-     ℹ Prometheus metrics returned successfully
-```
+test-report.html
 
-### Common Failures
 
-**"Connection Refused"**
-- BSC Nexus server is not running
-- Check `SERVER_URL` in `.env`
+Sample test result:
 
-**"Invalid API key"**
-- API key doesn't exist in database
-- Run seed script: `node bsc-nexus/scripts/seed.mjs`
+Test Summary
+------------
+Total Tests:  4
+Passed:       4 (100.0%)
+Failed:       0 (0.0%)
+Duration:     0.47s
 
-**"Database connection failed"**
-- PostgreSQL not running
-- Check `DATABASE_URL` in `.env`
+7. Adding a New Endpoint
+7.1 Step 1 – Extend the Mock Backend
 
-## 🔧 Advanced Usage
+Add a new route in mock-server.mjs:
 
-### Running Specific Test Categories
+app.get("/new-endpoint", (req, res) => {
+  res.status(200).json({ message: "New endpoint operational" });
+});
 
-Edit `src/test-runner.ts` and comment out test suites you don't need:
+7.2 Step 2 – Create a New Test File
 
-```typescript
+Add a corresponding test module in the tests/ directory, for example:
+tests/new-endpoint.ts
+
+Example:
+
+import axios from "axios";
+import { TestResult } from "../types.js";
+
+export async function testNewEndpoint(config): Promise<TestResult[]> {
+  const start = Date.now();
+  try {
+    const response = await axios.get(`${config.serverUrl}/new-endpoint`);
+    const passed = response.status === 200 && response.data.message;
+    return [{
+      name: "New Endpoint Test",
+      passed,
+      duration: Date.now() - start,
+      details: `Response: ${JSON.stringify(response.data)}`,
+      suggestion: passed ? null : "Check response payload or route definition."
+    }];
+  } catch (error: any) {
+    return [{
+      name: "New Endpoint Test",
+      passed: false,
+      duration: Date.now() - start,
+      error: error.message
+    }];
+  }
+}
+
+7.3 Step 3 – Register the Test
+
+Open test-runner.ts and include it in the test suite list:
+
+import { testNewEndpoint } from "./tests/new-endpoint.js";
+
 const testSuites = [
-  { name: 'Health Checks', fn: () => testHealth(config) },
-  // { name: 'RPC Proxy', fn: () => testRPC(config) },  // Commented out
-  // ... other tests
+  { name: "Health Checks", fn: () => testHealth(config) },
+  { name: "RPC Proxy", fn: () => testRPC(config) },
+  { name: "New Endpoint", fn: () => testNewEndpoint(config) },
 ];
-```
 
-### Customizing Timeouts
 
-Edit `.env`:
-```env
-REQUEST_TIMEOUT=20000    # 20 seconds
-WEBSOCKET_TIMEOUT=10000  # 10 seconds
-```
+Re-run:
 
-### Adding Custom Tests
+npm test
 
-1. Create a new file: `src/tests/my-test.ts`
-2. Export an async function that returns `TestResult[]`
-3. Import and add to `src/test-runner.ts`
 
-## 📁 Project Structure
+The new endpoint will be included in the summary and HTML report.
 
-```
-.
-├── src/
-│   ├── test-runner.ts       # Main test orchestrator
-│   ├── report-generator.ts  # HTML report generator
-│   ├── config.ts            # Configuration loader
-│   ├── types.ts             # TypeScript definitions
-│   └── tests/               # Individual test modules
-│       ├── health.ts
-│       ├── rpc.ts
-│       ├── tokens.ts
-│       ├── graphql.ts
-│       ├── websocket.ts
-│       ├── webhooks.ts
-│       ├── security.ts
-│       └── database.ts
-├── bsc-nexus/               # BSC Nexus codebase (what we test)
-├── package.json
-├── tsconfig.json
-├── .env.example
-└── test-report.html         # Generated after test run
-```
+8. Troubleshooting
+Issue	Cause	Solution
+Error: Cannot find module	Missing file or incorrect import path	Verify imports use .js extensions after TypeScript compilation
+Server not reachable	Mock server not running	Run node mock-server.mjs before executing tests
+Health test stuck	Port conflict or Codespace timeout	Restart the Codespace or change to a new port in mock-server.mjs
+RPC endpoint invalid	BSC public node timeout	Retry or switch to another RPC URL
+9. Contribution Guidelines
 
-## 🐛 Troubleshooting
+Fork the repository.
 
-### Tests Always Fail
+Create a feature branch (feature/new-endpoint).
 
-1. **Check server is running**: `curl http://localhost:3000/health`
-2. **Verify API key**: Ensure it exists in BSC Nexus database
-3. **Check configuration**: Review all settings in `.env`
+Follow existing TypeScript and naming conventions.
 
-### Database Tests Fail
+Include new tests for any new features.
 
-1. **PostgreSQL running?**: `docker ps | grep postgres`
-2. **Migrations applied?**: `cd bsc-nexus && npm run prisma:migrate`
-3. **Correct DATABASE_URL?**: Check connection string format
+Submit a pull request with a concise summary of changes.
 
-### WebSocket Tests Timeout
+10. License
 
-1. **Increase timeout**: Set `WEBSOCKET_TIMEOUT=10000` in `.env`
-2. **Check WebSocket server**: Verify BSC Nexus initialized WebSocket
-3. **Firewall/proxy?**: Ensure WebSocket connections aren't blocked
+This project is licensed under the MIT License.
+See the main README
+ for details.
 
-## 💡 Tips
-
-- Run tests after every BSC Nexus deployment
-- Use HTML reports for stakeholder reviews
-- Set up CI/CD to run tests automatically
-- Monitor test duration to catch performance regressions
-- Keep test environment separate from production
-
-## 🔒 Important Notes
-
-### Replit Limitations
-
-- ⚠️ **BSC Nexus cannot run in Replit** (requires Docker)
-- ✅ **QA suite CAN run in Replit** (connects to external server)
-
-### API Keys
-
-- Use plain-text keys in `.env`, not SHA256 hashes
-- BSC Nexus hashes keys automatically on lookup
-- Default test key: `dev-key-123` (if seeded)
-
-### Security
-
-- Never commit real API keys to version control
-- Use `.env` file for local configuration only
-- For CI/CD, use environment variables
-
-## 📞 Need Help?
-
-- Read the full [README.md](./README.md)
-- Check [replit.md](./replit.md) for project documentation
-- Review individual test files for implementation details
-
-## ✨ Next Steps
-
-1. Run the tests against your BSC Nexus server
-2. Review the HTML report
-3. Fix any failing tests
-4. Set up automated testing in your CI/CD pipeline
-5. Add custom tests for your specific use cases
+Repository: https://github.com/grkhmz23/BSC-Nexus
