@@ -1,0 +1,38 @@
+name: BSC Nexus CI/CD
+on:
+  push:
+    branches: [ main ]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    - run: npm ci
+    - run: npm run build
+    - run: |
+        cat > .env << 'EOF'
+        PORT=3000
+        UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org
+        ADMIN_TOKEN=test-admin-token
+        NODE_ENV=development
+        EOF
+    - run: npm start & echo $! > server.pid && sleep 10
+    - run: curl http://localhost:3000/health
+    - run: npm test
+      env:
+        SERVER_URL: http://localhost:3000
+        API_KEY: dev-key-123
+    - run: kill $(cat server.pid) || true
+      if: always()
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-report-${{ matrix.node-version }}
+        path: test-report.html
