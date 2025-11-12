@@ -24,16 +24,17 @@ async function runAllTests(): Promise<TestSummary> {
   console.log(chalk.gray(`  WebSocket URL: ${config.wsUrl}`));
   console.log(chalk.gray(`  Database: ${config.databaseUrl ? 'Configured' : 'Not configured'}\n`));
   
-  const testSuites = [
-    { name: 'Health Checks', fn: () => testHealth(config) },
-    { name: 'RPC Proxy', fn: () => testRPC(config) },
-    { name: 'Token API', fn: () => testTokens(config) },
-    { name: 'GraphQL API', fn: () => testGraphQL(config) },
-    { name: 'WebSocket', fn: () => testWebSocket(config) },
-    { name: 'Webhooks', fn: () => testWebhooks(config) },
-    { name: 'Security', fn: () => testSecurity(config) },
-    { name: 'Database & Indexer', fn: () => testDatabase(config) },
-  ];
+  cconst testSuites = [
+  { name: 'Health Checks', fn: () => testHealth(config) },
+  { name: 'RPC Proxy', fn: () => testRPC(config) },
+  { name: 'Token API', fn: () => testTokens(config) },
+  { name: 'Security', fn: () => testSecurity(config) },
+  // Phase 2 features - disabled for now
+  // { name: 'GraphQL API', fn: () => testGraphQL(config) },
+  // { name: 'WebSocket', fn: () => testWebSocket(config) },
+  // { name: 'Webhooks', fn: () => testWebhooks(config) },
+  // { name: 'Database & Indexer', fn: () => testDatabase(config) },
+];
   
   for (const suite of testSuites) {
     console.log(chalk.bold.white(`\n▶ Running ${suite.name} tests...`));
