@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # BSC Nexus Backend
+  bsc-nexus:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org
+      - ADMIN_TOKEN=dev-admin-token
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/bsc_nexus
+      - ANTI_MEV_ENABLED=false
+      - METRICS_ENABLED=true
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ./src:/app/src
+    networks:
+      - bsc-nexus-network
+
+  # PostgreSQL Database (optional)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=bsc_nexus
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - bsc-nexus-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (optional - for caching)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - bsc-nexus-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  bsc-nexus-network:
+    driver: bridge
