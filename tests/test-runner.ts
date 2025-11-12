@@ -1,13 +1,13 @@
 import chalk from 'chalk';
 import { loadConfig } from './config.js';
-import { testHealth } from './tests/health.js';
-import { testRPC } from './tests/rpc.js';
-import { testTokens } from './tests/tokens.js';
-import { testGraphQL } from './tests/graphql.js';
-import { testWebSocket } from './tests/websocket.js';
-import { testWebhooks } from './tests/webhooks.js';
-import { testSecurity } from './tests/security.js';
-import { testDatabase } from './tests/database.js';
+import { testHealth } from './health.js';
+import { testRPC } from './rpc.js';
+import { testTokens } from './tokens.js';
+import { testGraphQL } from './graphql.js';
+import { testWebSocket } from './websocket.js';
+import { testWebhooks } from './webhooks.js';
+import { testSecurity } from './security.js';
+import { testDatabase } from './database.js';
 import { TestSummary, TestResult } from './types.js';
 import { saveHTMLReport } from './report-generator.js';
 
