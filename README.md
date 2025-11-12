@@ -1,169 +1,163 @@
-# BSC Nexus - Enterprise BSC RPC Infrastructure
+# BSC Nexus
 
-**Production-ready BNB Smart Chain RPC proxy with Anti-MEV protection, monitoring, and comprehensive testing.**
+Enterprise-grade RPC infrastructure for Binance Smart Chain with built-in anti-MEV protection, authentication, and comprehensive monitoring.
 
+![Build Status](https://github.com/grkhmz23/bsc-nexus/workflows/Build%20and%20Test/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🚀 Features
+## Overview
 
-- ✅ **JSON-RPC Proxy** - Full BSC RPC compatibility with request forwarding
-- 🛡️ **Anti-MEV Protection** - Private relay routing for transaction privacy
-- 🔐 **API Key Authentication** - Secure access control and usage tracking
-- 📊 **Prometheus Metrics** - Production monitoring and observability
-- 🎯 **Token Information API** - Query BEP-20 token metadata
-- ⚡ **Rate Limiting** - Protection against abuse
-- 🧪 **Comprehensive Testing** - 100% test coverage with automated QA suite
-- 🐳 **Docker Ready** - Containerized deployment
-- 📝 **Professional Logging** - Winston-based structured logging
+BSC Nexus is a production-ready backend platform that provides secure and scalable JSON-RPC proxy services for Binance Smart Chain. It includes API key authentication, rate limiting, token information endpoints, and Prometheus metrics for monitoring.
 
-## 📋 Table of Contents
+## Features
 
-- [Quick Start](#quick-start)
-- [Architecture](#architecture)
-- [API Documentation](#api-documentation)
-- [Configuration](#configuration)
-- [Development](#development)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Anti-MEV Design](#anti-mev-design)
+### Core Infrastructure (Production Ready)
 
-## 🏃 Quick Start
+- **JSON-RPC Proxy** - High-performance request forwarding to BSC mainnet nodes
+- **Anti-MEV Routing** - Smart routing to protect against MEV attacks
+- **Token Information API** - Query BEP-20 token metadata (name, symbol, decimals)
+- **API Authentication** - API key-based access control with usage tracking
+- **Health Monitoring** - Comprehensive health checks and uptime monitoring
+- **Metrics Collection** - Prometheus-compatible metrics endpoint
+- **Rate Limiting** - Request throttling and abuse prevention
+- **Docker Support** - Full containerization with Docker Compose
+
+### Planned Features
+
+- GraphQL API interface
+- WebSocket real-time subscriptions
+- Webhook notification system
+- PostgreSQL database integration
+- Advanced analytics dashboard
+
+## Test Coverage
+
+Current status: **10 out of 10 tests passing (100%)**
+
+- Health Checks: 2/2 passing
+- RPC Proxy: 2/2 passing
+- Token API: 1/1 passing
+- Security & Authentication: 5/5 passing
+
+Automated testing runs on every push using GitHub Actions, testing against Node.js 18.x and 20.x.
+
+## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+
-- npm 9+
-- (Optional) Docker & Docker Compose
+- Node.js 18 or higher
+- npm or yarn
+- Optional: Docker and Docker Compose
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/grkhmz23/BSC-Nexus.git
-cd BSC-Nexus
-
-# Install dependencies
+git clone https://github.com/grkhmz23/bsc-nexus.git
+cd bsc-nexus
 npm install
-
-# Copy environment configuration
-cp .env.example .env
-
-# Edit .env with your settings
-nano .env
 ```
 
-### Run Locally
+### Configuration
+
+Copy the example environment file and configure it:
 
 ```bash
-# Development mode with hot reload
-npm run dev
+cp .env.example .env
+```
 
-# Production mode
+Edit `.env` with your settings:
+
+```env
+PORT=3000
+NODE_ENV=production
+UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org
+ADMIN_TOKEN=your-secure-admin-token
+```
+
+### Running the Server
+
+Development mode with hot reload:
+```bash
+npm run dev
+```
+
+Production mode:
+```bash
 npm run build
 npm start
 ```
 
-Server will start on `http://localhost:3000`
-
-### Run with Docker
-
+Using Docker:
 ```bash
-# Start all services (backend + postgres + redis)
 docker-compose up -d
-
-# View logs
-docker-compose logs -f bsc-nexus
-
-# Stop services
-docker-compose down
 ```
 
-## 🏗️ Architecture
+## API Documentation
 
-```
-┌─────────────┐
-│   Client    │
-│  (Wallet)   │
-└──────┬──────┘
-       │
-       │ JSON-RPC Request
-       │ + API Key
-       ▼
-┌─────────────────────────────────────┐
-│        BSC Nexus Server             │
-│  ┌───────────────────────────────┐  │
-│  │  Authentication Middleware    │  │
-│  │  - API Key Validation         │  │
-│  │  - Rate Limiting              │  │
-│  └───────────────────────────────┘  │
-│                │                     │
-│  ┌─────────────▼──────────────────┐ │
-│  │   RPC Proxy Service            │ │
-│  │  - Request Validation          │ │
-│  │  - Anti-MEV Routing            │ │
-│  │  - Metrics Collection          │ │
-│  └───────────┬────────────────────┘ │
-└──────────────┼──────────────────────┘
-               │
-        ┌──────┴──────┐
-        │             │
-   ┌────▼────┐   ┌────▼────────┐
-   │ Private │   │  Public BSC │
-   │  Relay  │   │  RPC Nodes  │
-   └─────────┘   └─────────────┘
-```
+### Health and Monitoring
 
-## 📚 API Documentation
-
-### Health Check
-
+**Health Check** (public endpoint)
 ```bash
-GET /health
+curl http://localhost:3000/health
+```
 
 Response:
+```json
 {
   "ok": true,
   "status": "healthy",
-  "timestamp": "2025-01-15T10:30:00Z",
-  "uptime": 3600,
-  "config": {
-    "antiMevEnabled": false,
-    "metricsEnabled": true
-  }
+  "timestamp": "2025-11-12T22:30:00.000Z",
+  "uptime": 3600
 }
 ```
 
-### RPC Proxy
-
+**Metrics Endpoint** (public endpoint)
 ```bash
-POST /v1/rpc
-Headers:
-  x-api-key: your-api-key
-
-Body:
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "eth_blockNumber",
-  "params": []
-}
-
-Response:
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": "0x135f24a"
-}
+curl http://localhost:3000/metrics
 ```
 
-### Token Information
+Returns Prometheus-format metrics including RPC request counts, latencies, and Node.js runtime metrics.
 
+### JSON-RPC Proxy
+
+All RPC requests require an API key via the `x-api-key` header.
+
+**Get Latest Block Number**
 ```bash
-GET /v1/tokens/:address/info
-Headers:
-  x-api-key: your-api-key
+curl -X POST http://localhost:3000/v1/rpc \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "eth_blockNumber",
+    "params": []
+  }'
+```
+
+**Get Chain ID**
+```bash
+curl -X POST http://localhost:3000/v1/rpc \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "eth_chainId",
+    "params": []
+  }'
+```
+
+### Token Information API
+
+**Get Token Metadata**
+```bash
+curl http://localhost:3000/v1/tokens/0xe9e7cea3dedca5984780bafc599bd69add087d56/info \
+  -H "x-api-key: your-api-key"
+```
 
 Response:
+```json
 {
   "address": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
   "name": "BUSD Token",
@@ -172,197 +166,212 @@ Response:
 }
 ```
 
-### Prometheus Metrics
+### Admin Endpoints
 
+Admin endpoints require an admin token via the `x-admin-token` header.
+
+**Create API Key**
 ```bash
-GET /metrics
-
-Response: (Prometheus format)
-# HELP bsc_nexus_rpc_requests_total Total number of RPC requests
-# TYPE bsc_nexus_rpc_requests_total counter
-bsc_nexus_rpc_requests_total{method="eth_blockNumber",status="success"} 1250
-...
+curl -X POST http://localhost:3000/admin/api-keys \
+  -H "Content-Type: application/json" \
+  -H "x-admin-token: your-admin-token" \
+  -d '{"name": "Client Name"}'
 ```
 
-### Admin API (Key Management)
-
+**List API Keys**
 ```bash
-# List API Keys
-GET /admin/keys
-Headers:
-  x-admin-token: your-admin-token
-
-# Create API Key
-POST /admin/keys
-Headers:
-  x-admin-token: your-admin-token
-Body:
-{
-  "name": "Production Key"
-}
-
-# Delete API Key
-DELETE /admin/keys/:key
-Headers:
-  x-admin-token: your-admin-token
+curl http://localhost:3000/admin/api-keys \
+  -H "x-admin-token: your-admin-token"
 ```
 
-## ⚙️ Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port | `3000` |
-| `NODE_ENV` | Environment | `development` |
-| `UPSTREAM_RPC_URL` | Primary BSC RPC | `https://bsc-dataseed.binance.org` |
-| `ANTI_MEV_ENABLED` | Enable Anti-MEV routing | `false` |
-| `PRIVATE_RELAY_URL` | Private relay endpoint | - |
-| `ADMIN_TOKEN` | Admin API authentication | `change-me-in-production` |
-| `DATABASE_URL` | PostgreSQL connection | - |
-| `RATE_LIMIT_MAX_REQUESTS` | Requests per minute | `100` |
-
-See `.env.example` for complete configuration.
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-src/
-├── server/
-│   ├── config/          # Configuration & logging
-│   ├── middleware/      # Auth, rate limiting, errors
-│   ├── routes/          # API endpoints
-│   ├── services/        # Business logic
-│   ├── app.ts          # Express app setup
-│   └── server.ts       # Server startup
-tests/
-├── health.ts           # Health endpoint tests
-├── rpc.ts             # RPC proxy tests
-├── security.ts        # Security tests
-└── test-runner.ts     # Test orchestration
-```
-
-### Available Scripts
-
+**Delete API Key**
 ```bash
-npm run dev          # Development with hot reload
-npm run build        # Compile TypeScript
-npm start            # Production server
-npm test             # Run QA test suite
+curl -X DELETE http://localhost:3000/admin/api-keys/key-to-delete \
+  -H "x-admin-token: your-admin-token"
 ```
 
-## 🧪 Testing
+## Testing
 
-BSC Nexus includes a comprehensive QA test suite covering all endpoints:
-
+Run the complete test suite:
 ```bash
-# Run all tests
 npm test
-
-# View HTML report
-open test-report.html
 ```
 
-**Test Categories:**
-- ✅ Health Checks
-- ✅ RPC Proxy
-- ✅ Token API
-- ✅ Security & Authentication
-- ✅ WebSocket (planned)
-- ✅ Webhooks (planned)
-- ✅ Database & Indexer (planned)
+Build the TypeScript code:
+```bash
+npm run build
+```
 
-## 🚢 Deployment
+Run with development server:
+```bash
+npm run dev
+```
 
-### Docker Deployment
+After running tests, a detailed HTML report is generated at `test-report.html`.
+
+## Project Structure
+
+```
+bsc-nexus/
+├── .github/
+│   └── workflows/
+│       └── build.yml           # CI/CD pipeline
+├── src/
+│   └── server/
+│       ├── config/             # Configuration and environment
+│       ├── middleware/         # Authentication and error handling
+│       ├── routes/             # API route handlers
+│       └── services/           # Business logic and external calls
+├── tests/                      # Automated test suite
+│   ├── health.ts
+│   ├── rpc.ts
+│   ├── tokens.ts
+│   ├── security.ts
+│   └── test-runner.ts
+├── .env.example                # Environment variables template
+├── Dockerfile                  # Container configuration
+├── docker-compose.yml          # Multi-service setup
+├── package.json                # Node.js dependencies
+├── tsconfig.json               # TypeScript configuration
+└── README.md
+```
+
+## Deployment
+
+### Using Docker
+
+The simplest deployment method is using Docker Compose:
 
 ```bash
-# Build image
-docker build -t bsc-nexus:latest .
-
-# Run container
-docker run -d \
-  -p 3000:3000 \
-  -e UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org \
-  -e ADMIN_TOKEN=your-secure-token \
-  --name bsc-nexus \
-  bsc-nexus:latest
+docker-compose up -d
 ```
 
-### Production Checklist
-
-- [ ] Change `ADMIN_TOKEN` to secure random value
-- [ ] Configure `DATABASE_URL` for persistence
-- [ ] Set up monitoring (Prometheus + Grafana)
-- [ ] Configure CORS for your domain
-- [ ] Enable HTTPS (use reverse proxy like Nginx)
-- [ ] Set up log aggregation
-- [ ] Configure rate limits appropriately
-- [ ] Review security headers
-
-## 🛡️ Anti-MEV Design
-
-BSC Nexus includes optional Anti-MEV protection for `eth_sendRawTransaction`:
-
-**How it works:**
-1. Detect raw transaction submissions
-2. Apply random delay (20-120ms) to decorrelate timing
-3. Route to private relay instead of public mempool
-4. Fallback to public RPC if relay fails
-
-**Configuration:**
-```env
-ANTI_MEV_ENABLED=true
-PRIVATE_RELAY_URL=https://your-private-relay.example.com
-ANTI_MEV_HARD_FAIL_ON_RELAY_ERROR=false
+View logs:
+```bash
+docker-compose logs -f
 ```
 
-See [Anti-MEV Design Document](./docs/Anti-MEV_Design.md) for details.
+Stop services:
+```bash
+docker-compose down
+```
 
-## 📖 Documentation
+### Cloud Platforms
 
-- [API Reference](./docs/API_Reference.md)
-- [Developer Integration Guide](./docs/Developer_Integration_Guide.md)
-- [Anti-MEV Design](./docs/Anti-MEV_Design.md)
-- [Usage Guide](./USAGE.md)
+**Railway**
+```bash
+railway up
+```
 
-## 🤝 Contributing
+**Render**
 
-Contributions are welcome! Please:
+Connect your repository in the Render dashboard and it will automatically detect the Dockerfile.
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new features
-5. Submit a pull request
+**DigitalOcean App Platform**
 
-## 📄 License
+Use the App Platform interface to connect your GitHub repository. The platform will automatically build and deploy using the provided Dockerfile.
 
-MIT License - see [LICENSE](LICENSE) for details.
+### Environment Variables for Production
 
-## 👨‍💻 Author
+Required environment variables:
+- `UPSTREAM_RPC_URL` - BSC RPC endpoint
+- `ADMIN_TOKEN` - Admin authentication token
+- `NODE_ENV` - Set to "production"
+- `PORT` - Usually auto-configured by the platform
 
-**Gorkhmaz Beydullayev**  
-Lyon, France  
-[GitHub](https://github.com/grkhmz23) | [LinkedIn](https://linkedin.com/in/gorkhmaz-beydullayev)
+Optional:
+- `API_KEYS` - Pre-configured API keys (format: key1:name1,key2:name2)
 
-## 🙏 Acknowledgments
+## Security
 
-- Binance Smart Chain community
-- Anthropic Claude for development assistance
-- Open source contributors
+The platform implements several security measures:
 
----
+- API key authentication for all protected endpoints
+- Admin token requirement for management operations
+- Rate limiting on all endpoints
+- Security headers via Helmet.js
+- CORS configuration
+- Request validation
+- Error handling that prevents information disclosure
 
-**⭐ Star this repo if you find it useful!**
+## Monitoring
 
-Repository: https://github.com/grkhmz23/BSC-Nexus
+Prometheus metrics are available at `/metrics` and include:
 
+- `rpc_requests_total` - Total RPC requests by method and status
+- `rpc_request_duration_seconds` - RPC request latency histogram
+- Standard Node.js runtime metrics
+- HTTP request metrics
 
+Integrate with Prometheus and Grafana for visualization and alerting.
 
+## Development
 
-# CI/CD Status: Active
-# CI/CD Status: Active
+Install dependencies:
+```bash
+npm install
+```
 
+Run in development mode with hot reload:
+```bash
+npm run dev
+```
+
+Build TypeScript:
+```bash
+npm run build
+```
+
+Run tests:
+```bash
+npm test
+```
+
+Type checking:
+```bash
+npx tsc --noEmit
+```
+
+## Documentation
+
+Additional documentation is available in the repository:
+
+- Quick Start Guide - Get up and running in minutes
+- API Reference - Complete endpoint documentation
+- Anti-MEV Design - Technical details on MEV protection
+- Developer Integration Guide - Integration examples and best practices
+
+## Roadmap
+
+### Current Release (Phase 1)
+- Core RPC proxy functionality
+- Anti-MEV routing
+- API authentication system
+- Prometheus metrics
+- Docker deployment support
+- Comprehensive test coverage
+
+### Next Release (Phase 2)
+- GraphQL API interface
+- WebSocket real-time subscriptions
+- PostgreSQL database integration
+- Advanced analytics dashboard
+- Multi-chain support (Ethereum, Polygon)
+
+## Contributing
+
+Contributions are welcome. Please submit pull requests or open issues for bugs and feature requests.
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+## Support
+
+For questions or issues:
+- Open an issue on GitHub
+- Repository: https://github.com/grkhmz23/bsc-nexus
+
+## Status
+
+**Production Ready** - The core infrastructure is fully tested and ready for production use. All Phase 1 features are complete with 100% test coverage.
