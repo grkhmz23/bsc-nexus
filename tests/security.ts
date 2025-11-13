@@ -1,115 +1,144 @@
 import axios from 'axios';
-import { TestConfig, TestResult } from '../types.js';
+import { TestConfig, TestResult } from './types.js';
+
+// Helper function to reduce complexity
+async function testEndpoint(
+  url: string,
+  name: string,
+  config: TestConfig,
+  headers: Record<string, string>,
+  expectedStatus: number | number[],
+  successMessage: string,
+  errorMessage: string,
+  suggestion: string
+): Promise<TestResult> {
+  const start = Date.now();
+  const expectedStatuses = Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
+  
+  try {
+    const response = await axios.post(
+      url,
+      { jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] },
+      {
+        headers,
+        timeout: config.requestTimeout,
+        validateStatus: () => true,
+      }
+    );
+    
+    const passed = expectedStatuses.includes(response.status);
+    return {
+      name,
+      category: 'Security',
+      passed,
+      duration: Date.now() - start,
+      details: passed ? successMessage : `Endpoint returned ${response.status}`,
+      error: !passed ? errorMessage : undefined,
+      suggestion: !passed ? suggestion : undefined,
+    };
+  } catch (error: any) {
+    return {
+      name,
+      category: 'Security',
+      passed: false,
+      duration: Date.now() - start,
+      error: error.message,
+      suggestion: 'Check if server is running and accessible',
+    };
+  }
+}
+
+// Helper for GET requests
+async function testGetEndpoint(
+  url: string,
+  name: string,
+  config: TestConfig,
+  expectedStatus: number,
+  successMessage: string,
+  errorMessage: string,
+  suggestion: string
+): Promise<TestResult> {
+  const start = Date.now();
+  
+  try {
+    const response = await axios.get(url, {
+      timeout: config.requestTimeout,
+      validateStatus: () => true,
+    });
+    
+    const passed = response.status === expectedStatus;
+    return {
+      name,
+      category: 'Security',
+      passed,
+      duration: Date.now() - start,
+      details: passed ? successMessage : `Endpoint returned ${response.status}`,
+      error: !passed ? errorMessage : undefined,
+      suggestion: !passed ? suggestion : undefined,
+    };
+  } catch (error: any) {
+    return {
+      name,
+      category: 'Security',
+      passed: false,
+      duration: Date.now() - start,
+      error: error.message,
+      suggestion: 'Check if server is running and accessible',
+    };
+  }
+}
 
 export async function testSecurity(config: TestConfig): Promise<TestResult[]> {
   const results: TestResult[] = [];
   
   // Test 1: RPC endpoint requires API key
-  const start1 = Date.now();
-  try {
-    const response = await axios.post(
+  results.push(
+    await testEndpoint(
       `${config.serverUrl}/v1/rpc`,
-      { jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] },
-      {
-        timeout: config.requestTimeout,
-        validateStatus: () => true, // Don't throw on non-200
-      }
-    );
-    
-    const is401or403 = response.status === 401 || response.status === 403;
-    results.push({
-      name: 'RPC endpoint requires API key',
-      category: 'Security',
-      passed: is401or403,
-      duration: Date.now() - start1,
-      details: is401or403 ? 'Correctly returns 401/403 without API key' : `Endpoint returned ${response.status}`,
-      error: !is401or403 ? 'Endpoint accessible without API key' : undefined,
-      suggestion: !is401or403 ? 'Add requireApiKey middleware to /v1/rpc endpoint' : undefined,
-    });
-  } catch (error: any) {
-    results.push({
-      name: 'RPC endpoint requires API key',
-      category: 'Security',
-      passed: false,
-      duration: Date.now() - start1,
-      error: error.message,
-      suggestion: 'Check if server is running and accessible',
-    });
-  }
+      'RPC endpoint requires API key',
+      config,
+      {},
+      [401, 403],
+      'Correctly returns 401/403 without API key',
+      'Endpoint accessible without API key',
+      'Add requireApiKey middleware to /v1/rpc endpoint'
+    )
+  );
   
   // Test 2: Invalid API key returns 403
-  const start2 = Date.now();
-  try {
-    const response = await axios.post(
+  results.push(
+    await testEndpoint(
       `${config.serverUrl}/v1/rpc`,
-      { jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] },
-      {
-        headers: { 'x-api-key': 'invalid-key-12345' },
-        timeout: config.requestTimeout,
-        validateStatus: () => true,
-      }
-    );
-    
-    const is403 = response.status === 403;
-    results.push({
-      name: 'Invalid API key returns 403',
-      category: 'Security',
-      passed: is403,
-      duration: Date.now() - start2,
-      details: is403 ? 'Correctly rejects invalid API keys' : `Endpoint returned ${response.status}`,
-      error: !is403 ? 'Invalid API key accepted' : undefined,
-      suggestion: !is403 ? 'Verify API key validation logic' : undefined,
-    });
-  } catch (error: any) {
-    results.push({
-      name: 'Invalid API key returns 403',
-      category: 'Security',
-      passed: false,
-      duration: Date.now() - start2,
-      error: error.message,
-      suggestion: 'Check if server is running and accessible',
-    });
-  }
+      'Invalid API key returns 403',
+      config,
+      { 'x-api-key': 'invalid-key-12345' },
+      403,
+      'Correctly rejects invalid API keys',
+      'Invalid API key accepted',
+      'Verify API key validation logic'
+    )
+  );
   
   // Test 3: Admin endpoint requires admin token
-  const start3 = Date.now();
-  try {
-    const response = await axios.get(
-      `${config.serverUrl}/admin/keys`,
-      {
-        timeout: config.requestTimeout,
-        validateStatus: () => true,
-      }
-    );
-    
-    const is401 = response.status === 401;
-    results.push({
-      name: 'Admin endpoint requires admin token',
-      category: 'Security',
-      passed: is401,
-      duration: Date.now() - start3,
-      details: is401 ? 'Correctly requires admin token' : `Endpoint returned ${response.status}`,
-      error: !is401 ? 'Admin endpoint accessible without token' : undefined,
-      suggestion: !is401 ? 'Add admin token validation middleware' : undefined,
-    });
-  } catch (error: any) {
-    results.push({
-      name: 'Admin endpoint requires admin token',
-      category: 'Security',
-      passed: false,
-      duration: Date.now() - start3,
-      error: error.message,
-      suggestion: 'Check if server is running and accessible',
-    });
-  }
+  results.push(
+    await testGetEndpoint(
+      `${config.serverUrl}/admin/api-keys`,
+      'Admin endpoint requires admin token',
+      config,
+      401,
+      'Correctly requires admin token',
+      'Admin endpoint accessible without token',
+      'Add admin token validation middleware'
+    )
+  );
   
   // Test 4: Invalid admin token returns 401
   const start4 = Date.now();
   try {
     const response = await axios.get(
-      `${config.serverUrl}/admin/keys`,
+      `${config.serverUrl}/admin/api-keys`,
       {
-        headers: { 'x-admin-token': 'wrong-token' },
+        headers: { 'x-admin-token': 'invalid-token' },
         timeout: config.requestTimeout,
         validateStatus: () => true,
       }
@@ -121,7 +150,9 @@ export async function testSecurity(config: TestConfig): Promise<TestResult[]> {
       category: 'Security',
       passed: is401,
       duration: Date.now() - start4,
-      details: is401 ? 'Correctly rejects invalid admin tokens' : `Endpoint returned ${response.status}`,
+      details: is401 
+        ? 'Correctly rejects invalid admin tokens' 
+        : `Endpoint returned ${response.status}`,
       error: !is401 ? 'Invalid admin token accepted' : undefined,
       suggestion: !is401 ? 'Verify admin token validation' : undefined,
     });
@@ -136,34 +167,18 @@ export async function testSecurity(config: TestConfig): Promise<TestResult[]> {
     });
   }
   
-  // Test 5: Health endpoint is public (no auth required)
-  const start5 = Date.now();
-  try {
-    const response = await axios.get(
+  // Test 5: Health endpoint is public
+  results.push(
+    await testGetEndpoint(
       `${config.serverUrl}/health`,
-      {
-        timeout: config.requestTimeout,
-      }
-    );
-    
-    const passed = response.status === 200;
-    results.push({
-      name: 'Health endpoint is public',
-      category: 'Security',
-      passed,
-      duration: Date.now() - start5,
-      details: passed ? 'Health endpoint correctly accessible without auth' : 'Health endpoint requires auth',
-      suggestion: !passed ? 'Health endpoint should be public for monitoring' : undefined,
-    });
-  } catch (error: any) {
-    results.push({
-      name: 'Health endpoint is public',
-      category: 'Security',
-      passed: false,
-      duration: Date.now() - start5,
-      error: error.message,
-    });
-  }
+      'Health endpoint is public',
+      config,
+      200,
+      'Health endpoint correctly accessible without auth',
+      'Health endpoint requires auth',
+      'Health endpoint should be public for monitoring'
+    )
+  );
   
   return results;
 }
