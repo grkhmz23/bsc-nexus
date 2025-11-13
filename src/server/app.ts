@@ -98,7 +98,7 @@ export function createApp(): Application {
   app.use(healthRoutes);
   app.use(rpcRoutes);
   app.use(tokenRoutes);
-  app.use(adminRoutes);
+  app.use('/admin', adminRoutes);
   
   // 404 handler
   app.use(notFoundHandler);

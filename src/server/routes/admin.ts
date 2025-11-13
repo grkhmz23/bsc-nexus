@@ -5,9 +5,9 @@ import { logger } from '../config/logger.js';
 const router = Router();
 
 /**
- * GET /admin/keys - List all API keys
+ * GET /admin/api-keys - List all API keys
  */
-router.get('/admin/keys', requireAdminToken, (req: Request, res: Response) => {
+router.get('/api-keys', requireAdminToken, (req: Request, res: Response) => {
   try {
     const keys = listApiKeys();
     
@@ -35,9 +35,9 @@ router.get('/admin/keys', requireAdminToken, (req: Request, res: Response) => {
 });
 
 /**
- * POST /admin/keys - Create new API key
+ * POST /admin/api-keys - Create new API key
  */
-router.post('/admin/keys', requireAdminToken, (req: Request, res: Response) => {
+router.post('/api-keys', requireAdminToken, (req: Request, res: Response) => {
   try {
     const { name } = req.body;
     
@@ -73,9 +73,9 @@ router.post('/admin/keys', requireAdminToken, (req: Request, res: Response) => {
 });
 
 /**
- * DELETE /admin/keys/:key - Delete API key
+ * DELETE /admin/api-keys/:key - Delete API key
  */
-router.delete('/admin/keys/:key', requireAdminToken, (req: Request, res: Response) => {
+router.delete('/api-keys/:key', requireAdminToken, (req: Request, res: Response) => {
   try {
     const { key } = req.params;
     
