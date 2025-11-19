@@ -20,6 +20,13 @@ export interface UsageSummary {
   errorRate: number;
 }
 
+export interface RecentUsageQuery {
+  limit?: number;
+  apiKeyId?: string;
+  since?: Date;
+  statusCodeGte?: number;
+}
+
 export function setPrismaClient(client: PrismaClientType): void {
   prisma = client;
 }
@@ -79,5 +86,26 @@ export async function getUsageSummary(query: UsageQuery = {}): Promise<UsageSumm
       averageLatencyMs: group._avg.latencyMs,
       errorRate: total > 0 ? errors / total : 0,
     };
+  });
+}
+
+export async function getRecentUsage(query: RecentUsageQuery = {}): Promise<ApiUsageRecord[]> {
+  const where: any = {
+    ...(query.apiKeyId ? { apiKeyId: query.apiKeyId } : {}),
+    ...(query.since ? { timestamp: { gte: query.since } } : {}),
+    ...(query.statusCodeGte ? { statusCode: { gte: query.statusCodeGte } } : {}),
+  };
+
+  return prisma.apiUsage.findMany({
+    where,
+    orderBy: { timestamp: 'desc' },
+    take: query.limit ?? 50,
+  });
+}
+
+export async function getRecentErrors(query: RecentUsageQuery = {}): Promise<ApiUsageRecord[]> {
+  return getRecentUsage({
+    ...query,
+    statusCodeGte: Math.max(query.statusCodeGte ?? 400, 400),
   });
 }

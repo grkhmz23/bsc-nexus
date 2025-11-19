@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { requireApiKey, AuthenticatedRequest } from '../middleware/auth.js';
+import { rateLimit } from '../middleware/rateLimit.js';
 import { usageLogger } from '../middleware/usageLogger.js';
 import { getTokenInfo } from '../services/tokenService.js';
 import { logger } from '../config/logger.js';
@@ -9,7 +10,7 @@ const router = Router();
 /**
  * GET /v1/tokens/:address/info - Get token information
  */
-router.get('/v1/tokens/:address/info', requireApiKey, usageLogger, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/v1/tokens/:address/info', requireApiKey, rateLimit, usageLogger, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { address } = req.params;
 

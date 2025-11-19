@@ -10,6 +10,7 @@ import { testSecurity } from './security.js';
 import { testDatabase } from './database.js';
 import { testApiKeyService } from './api-key-service.unit.js';
 import { testUsageLogger } from './usage-logger.unit.js';
+import { testRateLimitService } from './rate-limit-service.unit.js';
 import { TestSummary, TestResult } from './types.js';
 import { saveHTMLReport } from './report-generator.js';
 
@@ -29,6 +30,7 @@ async function runAllTests(): Promise<TestSummary> {
   const testSuites = [
     { name: 'API Key Service', fn: () => testApiKeyService() },
     { name: 'Usage Logger', fn: () => testUsageLogger() },
+    { name: 'Rate Limit Service', fn: () => testRateLimitService() },
     { name: 'Health Checks', fn: () => testHealth(config) },
     { name: 'RPC Proxy', fn: () => testRPC(config) },
     { name: 'Token API', fn: () => testTokens(config) },

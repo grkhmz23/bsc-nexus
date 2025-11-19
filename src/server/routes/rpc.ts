@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { requireApiKey, AuthenticatedRequest } from '../middleware/auth.js';
+import { rateLimit } from '../middleware/rateLimit.js';
 import { usageLogger } from '../middleware/usageLogger.js';
 import { proxyRpcRequest, validateJsonRpcRequest, JsonRpcResponse } from '../services/rpcProxy.js';
 import { logger } from '../config/logger.js';
@@ -10,7 +11,7 @@ const router = Router();
 /**
  * POST /v1/rpc - JSON-RPC proxy endpoint
  */
-router.post('/v1/rpc', requireApiKey, usageLogger, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/v1/rpc', requireApiKey, rateLimit, usageLogger, async (req: AuthenticatedRequest, res: Response) => {
   const startTime = Date.now();
 
   try {
