@@ -1,375 +1,147 @@
-# BSC Nexus
+# BSC-NEXUS
 
-Enterprise-grade RPC infrastructure for Binance Smart Chain with built-in anti-MEV protection, authentication, and comprehensive monitoring.
+Enterprise-grade JSON-RPC infrastructure for Binance Smart Chain with anti-MEV routing, operational observability, and secure access control.
 
-![Build Status](https://github.com/grkhmz23/bsc-nexus/workflows/Build%20and%20Test/badge.svg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+## Table of Contents
+- [Introduction](#introduction)
+- [Core Capabilities](#core-capabilities)
+- [Architecture](#architecture)
+- [Security Model](#security-model)
+- [Monitoring and Reliability](#monitoring-and-reliability)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Running Locally](#running-locally)
+- [Docker Deployment](#docker-deployment)
+- [API Overview](#api-overview)
+- [Testing](#testing)
+- [Project Layout](#project-layout)
+- [Future Roadmap](#future-roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+- [Additional Documentation](#additional-documentation)
 
-## Overview
+## Introduction
+BSC-NEXUS is a production-ready backend for serving Binance Smart Chain RPC traffic. It combines high-performance proxying with authentication, rate limiting, and built-in protection against MEV vectors. The service exposes health, metrics, and token intelligence endpoints to support operational teams.
 
-BSC Nexus is a production-ready backend platform that provides secure and scalable JSON-RPC proxy services for Binance Smart Chain. It includes API key authentication, rate limiting, token information endpoints, and Prometheus metrics for monitoring.
+## Core Capabilities
+- **JSON-RPC proxy** with upstream failover and request validation.
+- **Anti-MEV routing** to reduce exposure to frontrunning and sandwich attacks.
+- **API key authentication** with admin-managed lifecycle endpoints.
+- **Rate limiting** and abuse protection tuned for public-facing APIs.
+- **Token intelligence API** for BEP-20 metadata (name, symbol, decimals).
+- **Observability** via Prometheus-compatible metrics and health checks.
+- **Container-first delivery** using Docker and Docker Compose.
 
-## Features
+## Architecture
+The service runs as a Node.js/TypeScript application. Major components include:
+- **Routing layer**: Express-based router handling `/v1/rpc`, token info, and admin endpoints.
+- **Middleware**: API key verification, admin token enforcement, error handling, rate limiting, and request shaping.
+- **Services**: Upstream RPC forwarding with anti-MEV logic and token metadata resolution.
+- **Observability**: Health and Prometheus metrics endpoints exposing RPC performance, error rates, and runtime metrics.
+- **Persistence**: Ephemeral runtime; pluggable database integration planned for future phases.
 
-### Core Infrastructure (Production Ready)
+## Security Model
+- API access is protected by API keys provided via the `x-api-key` header.
+- Administrative actions (creating, listing, deleting keys) require an `x-admin-token` header.
+- Rate limiting and input validation are enforced across public endpoints.
+- Security headers and CORS safeguards are configured for hosted deployments.
 
-- **JSON-RPC Proxy** - High-performance request forwarding to BSC mainnet nodes
-- **Anti-MEV Routing** - Smart routing to protect against MEV attacks
-- **Token Information API** - Query BEP-20 token metadata (name, symbol, decimals)
-- **API Authentication** - API key-based access control with usage tracking
-- **Health Monitoring** - Comprehensive health checks and uptime monitoring
-- **Metrics Collection** - Prometheus-compatible metrics endpoint
-- **Rate Limiting** - Request throttling and abuse prevention
-- **Docker Support** - Full containerization with Docker Compose
-
-### Planned Features
-
-- GraphQL API interface
-- WebSocket real-time subscriptions
-- Webhook notification system
-- PostgreSQL database integration
-- Advanced analytics dashboard
-
-## Test Coverage
-
-Current status: **10 out of 10 tests passing (100%)**
-
-- Health Checks: 2/2 passing
-- RPC Proxy: 2/2 passing
-- Token API: 1/1 passing
-- Security & Authentication: 5/5 passing
-
-Automated testing runs on every push using GitHub Actions, testing against Node.js 18.x and 20.x.
+## Monitoring and Reliability
+- `/health` exposes readiness and uptime signals for load balancers.
+- `/metrics` provides Prometheus-format metrics including RPC request totals, latency histograms, and Node.js runtime metrics.
+- Detailed HTML test reports are written to `test-report.html` after running the suite.
 
 ## Quick Start
+1. Clone the repository and install dependencies:
+   ```bash
+   git clone https://github.com/grkhmz23/bsc-nexus.git
+   cd bsc-nexus
+   npm install
+   ```
+2. Copy and adjust environment variables:
+   ```bash
+   cp .env.example .env
+   ```
+3. Run in development mode:
+   ```bash
+   npm run dev
+   ```
 
-### Prerequisites
+## Configuration
+Key environment variables:
+- `PORT`: Service port (default: 3000).
+- `NODE_ENV`: `development` or `production`.
+- `UPSTREAM_RPC_URL`: Binance Smart Chain RPC endpoint.
+- `ADMIN_TOKEN`: Secret required for admin endpoints.
+- `API_KEYS`: Optional comma-separated `key:name` entries for pre-provisioned clients.
 
-- Node.js 18 or higher
-- npm or yarn
-- Optional: Docker and Docker Compose
+## Running Locally
+- **Development** with hot reload: `npm run dev`
+- **Production build**: `npm run build` followed by `npm start`
 
-### Installation
-
-```bash
-git clone https://github.com/grkhmz23/bsc-nexus.git
-cd bsc-nexus
-npm install
-```
-
-### Configuration
-
-Copy the example environment file and configure it:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your settings:
-
-```env
-PORT=3000
-NODE_ENV=production
-UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org
-ADMIN_TOKEN=your-secure-admin-token
-```
-
-### Running the Server
-
-Development mode with hot reload:
-```bash
-npm run dev
-```
-
-Production mode:
-```bash
-npm run build
-npm start
-```
-
-Using Docker:
+## Docker Deployment
+Use Docker Compose for a consistent runtime:
 ```bash
 docker-compose up -d
 ```
+- View logs: `docker-compose logs -f`
+- Stop services: `docker-compose down`
 
-## API Documentation
+Cloud platforms such as Render, Railway, and DigitalOcean App Platform can deploy directly from the Dockerfile with minimal changes.
 
-### Health and Monitoring
+## API Overview
+- **Health**: `GET /health`
+- **Metrics**: `GET /metrics`
+- **JSON-RPC Proxy**: `POST /v1/rpc` (requires `x-api-key`)
+- **Token Metadata**: `GET /v1/tokens/{address}/info` (requires `x-api-key`)
+- **Admin**: `POST /admin/api-keys`, `GET /admin/api-keys`, `DELETE /admin/api-keys/{key}` (requires `x-admin-token`)
 
-**Health Check** (public endpoint)
-```bash
-curl http://localhost:3000/health
-```
-
-Response:
-```json
-{
-  "ok": true,
-  "status": "healthy",
-  "timestamp": "2025-11-12T22:30:00.000Z",
-  "uptime": 3600
-}
-```
-
-**Metrics Endpoint** (public endpoint)
-```bash
-curl http://localhost:3000/metrics
-```
-
-Returns Prometheus-format metrics including RPC request counts, latencies, and Node.js runtime metrics.
-
-### JSON-RPC Proxy
-
-All RPC requests require an API key via the `x-api-key` header.
-
-**Get Latest Block Number**
-```bash
-curl -X POST http://localhost:3000/v1/rpc \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: your-api-key" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "eth_blockNumber",
-    "params": []
-  }'
-```
-
-**Get Chain ID**
-```bash
-curl -X POST http://localhost:3000/v1/rpc \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: your-api-key" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "eth_chainId",
-    "params": []
-  }'
-```
-
-### Token Information API
-
-**Get Token Metadata**
-```bash
-curl http://localhost:3000/v1/tokens/0xe9e7cea3dedca5984780bafc599bd69add087d56/info \
-  -H "x-api-key: your-api-key"
-```
-
-Response:
-```json
-{
-  "address": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
-  "name": "BUSD Token",
-  "symbol": "BUSD",
-  "decimals": 18
-}
-```
-
-### Admin Endpoints
-
-Admin endpoints require an admin token via the `x-admin-token` header.
-
-**Create API Key**
-```bash
-curl -X POST http://localhost:3000/admin/api-keys \
-  -H "Content-Type: application/json" \
-  -H "x-admin-token: your-admin-token" \
-  -d '{"name": "Client Name"}'
-```
-
-**List API Keys**
-```bash
-curl http://localhost:3000/admin/api-keys \
-  -H "x-admin-token: your-admin-token"
-```
-
-**Delete API Key**
-```bash
-curl -X DELETE http://localhost:3000/admin/api-keys/key-to-delete \
-  -H "x-admin-token: your-admin-token"
-```
+Detailed request/response examples are available in the accompanying documentation set.
 
 ## Testing
-
-Run the complete test suite:
+Run the TypeScript tests:
 ```bash
 npm test
 ```
-
-Build the TypeScript code:
+Build verification:
 ```bash
 npm run build
 ```
-
-Run with development server:
-```bash
-npm run dev
-```
-
-After running tests, a detailed HTML report is generated at `test-report.html`.
-
-## Project Structure
-
-```
-bsc-nexus/
-├── .github/
-│   └── workflows/
-│       └── build.yml           # CI/CD pipeline
-├── src/
-│   └── server/
-│       ├── config/             # Configuration and environment
-│       ├── middleware/         # Authentication and error handling
-│       ├── routes/             # API route handlers
-│       └── services/           # Business logic and external calls
-├── tests/                      # Automated test suite
-│   ├── health.ts
-│   ├── rpc.ts
-│   ├── tokens.ts
-│   ├── security.ts
-│   └── test-runner.ts
-├── .env.example                # Environment variables template
-├── Dockerfile                  # Container configuration
-├── docker-compose.yml          # Multi-service setup
-├── package.json                # Node.js dependencies
-├── tsconfig.json               # TypeScript configuration
-└── README.md
-```
-
-## Deployment
-
-### Using Docker
-
-The simplest deployment method is using Docker Compose:
-
-```bash
-docker-compose up -d
-```
-
-View logs:
-```bash
-docker-compose logs -f
-```
-
-Stop services:
-```bash
-docker-compose down
-```
-
-### Cloud Platforms
-
-**Railway**
-```bash
-railway up
-```
-
-**Render**
-
-Connect your repository in the Render dashboard and it will automatically detect the Dockerfile.
-
-**DigitalOcean App Platform**
-
-Use the App Platform interface to connect your GitHub repository. The platform will automatically build and deploy using the provided Dockerfile.
-
-### Environment Variables for Production
-
-Required environment variables:
-- `UPSTREAM_RPC_URL` - BSC RPC endpoint
-- `ADMIN_TOKEN` - Admin authentication token
-- `NODE_ENV` - Set to "production"
-- `PORT` - Usually auto-configured by the platform
-
-Optional:
-- `API_KEYS` - Pre-configured API keys (format: key1:name1,key2:name2)
-
-## Security
-
-The platform implements several security measures:
-
-- API key authentication for all protected endpoints
-- Admin token requirement for management operations
-- Rate limiting on all endpoints
-- Security headers via Helmet.js
-- CORS configuration
-- Request validation
-- Error handling that prevents information disclosure
-
-## Monitoring
-
-Prometheus metrics are available at `/metrics` and include:
-
-- `rpc_requests_total` - Total RPC requests by method and status
-- `rpc_request_duration_seconds` - RPC request latency histogram
-- Standard Node.js runtime metrics
-- HTTP request metrics
-
-Integrate with Prometheus and Grafana for visualization and alerting.
-
-## Development
-
-Install dependencies:
-```bash
-npm install
-```
-
-Run in development mode with hot reload:
-```bash
-npm run dev
-```
-
-Build TypeScript:
-```bash
-npm run build
-```
-
-Run tests:
-```bash
-npm test
-```
-
-Type checking:
+Type checking without emit:
 ```bash
 npx tsc --noEmit
 ```
 
-## Documentation
+## Project Layout
+```
+bsc-nexus/
+├── src/                  # Application source (server, middleware, routes, services)
+├── tests/                # Automated test suite with HTML reporting
+├── prisma/               # Prisma schema (database integration planned)
+├── docker-compose.yml    # Container orchestration
+├── Dockerfile            # Service image
+├── .env.example          # Environment template
+└── README.md
+```
 
-Additional documentation is available in the repository:
-
-- Quick Start Guide - Get up and running in minutes
-- API Reference - Complete endpoint documentation
-- Anti-MEV Design - Technical details on MEV protection
-- Developer Integration Guide - Integration examples and best practices
-
-## Roadmap
-
-### Current Release (Phase 1)
-- Core RPC proxy functionality
-- Anti-MEV routing
-- API authentication system
-- Prometheus metrics
-- Docker deployment support
-- Comprehensive test coverage
-
-### Next Release (Phase 2)
-- GraphQL API interface
-- WebSocket real-time subscriptions
-- PostgreSQL database integration
-- Advanced analytics dashboard
-- Multi-chain support (Ethereum, Polygon)
+## Future Roadmap
+- **Data layer**: PostgreSQL-backed persistence for API keys, quotas, and analytics.
+- **Multi-chain support**: Extend proxying and MEV protection to Ethereum, Polygon, and other chains.
+- **Realtime interfaces**: WebSocket subscriptions for transaction and block events.
+- **GraphQL gateway**: Schema-driven access to RPC and token intelligence.
+- **Operational console**: Web dashboard for usage analytics, alerting, and key management.
+- **Webhooks**: Event-driven callbacks for transaction status and monitoring alerts.
 
 ## Contributing
-
-Contributions are welcome. Please submit pull requests or open issues for bugs and feature requests.
+Issues and pull requests are welcome. Please open an issue to discuss substantial changes before submitting a PR.
 
 ## License
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.
 
-This project is licensed under the MIT License. See the LICENSE file for details.
-
-## Support
-
-For questions or issues:
-- Open an issue on GitHub
-- Repository: https://github.com/grkhmz23/bsc-nexus
-
-
+## Additional Documentation
+- [Quick Start Guide](QUICKSTART.md)
+- [Usage Guide](USAGE.md)
+- [Developer Integration Guide](Developer%20Integration%20Guide%20%E2%80%93%20BSC%20Nexus)
+- [Anti-MEV Design](Anti-MEV%20Design%20%E2%80%93%20BSC%20Nexus)
+- [API Reference](API%20Reference%20%E2%80%93%20BSC%20Nexus)
+- [Production Runbook](PRODUCTION_README.md)
