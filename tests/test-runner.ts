@@ -10,6 +10,7 @@ import { testSecurity } from './security.js';
 import { testDatabase } from './database.js';
 import { testApiKeyService } from './api-key-service.unit.js';
 import { testUsageLogger } from './usage-logger.unit.js';
+import { testRateLimitService } from './rate-limit-service.unit.js';
 import { TestSummary, TestResult } from './types.js';
 import { saveHTMLReport } from './report-generator.js';
 

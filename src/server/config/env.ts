@@ -25,6 +25,8 @@ export interface ServerConfig {
   // Rate Limiting
   rateLimitWindowMs: number;
   rateLimitMaxRequests: number;
+  defaultRateLimitPerMinute: number;
+  rateLimitBurstFactor: number;
   
   // WebSocket
   wsEnabled: boolean;
@@ -44,10 +46,18 @@ function parseNumber(value: string | undefined, defaultValue: number): number {
   return isNaN(parsed) ? defaultValue : parsed;
 }
 
+function parseFloatNumber(value: string | undefined, defaultValue: number): number {
+  if (!value) return defaultValue;
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? defaultValue : parsed;
+}
+
 export function loadConfig(): ServerConfig {
   // Validate required variables
   const upstreamRpcUrl = process.env.UPSTREAM_RPC_URL || process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org';
-  
+  const expressRateLimitMax = parseNumber(process.env.RATE_LIMIT_MAX_REQUESTS, 100);
+  const defaultPerMinute = parseNumber(process.env.DEFAULT_RATE_LIMIT_PER_MINUTE, expressRateLimitMax);
+
   const config: ServerConfig = {
     // Server
     port: parseNumber(process.env.PORT, 3000),
@@ -74,7 +84,9 @@ export function loadConfig(): ServerConfig {
     
     // Rate Limiting
     rateLimitWindowMs: parseNumber(process.env.RATE_LIMIT_WINDOW_MS, 60000), // 1 minute
-    rateLimitMaxRequests: parseNumber(process.env.RATE_LIMIT_MAX_REQUESTS, 100),
+    rateLimitMaxRequests: expressRateLimitMax,
+    defaultRateLimitPerMinute: defaultPerMinute,
+    rateLimitBurstFactor: parseFloatNumber(process.env.RATE_LIMIT_BURST_FACTOR, 1),
     
     // WebSocket
     wsEnabled: parseBoolean(process.env.WS_ENABLED, true),

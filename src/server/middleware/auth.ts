@@ -2,9 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import { logger } from '../config/logger.js';
 import { config } from '../config/env.js';
 import { getApiKeyByValue, ApiKeyRecord } from '../services/apiKeyService.js';
-
+import { RateLimitResult } from '../services/rateLimitService.js';
 export interface RequestContext {
   apiKey?: ApiKeyRecord;
+rateLimit?: RateLimitResult;
 }
 
 export interface AuthenticatedRequest extends Request {

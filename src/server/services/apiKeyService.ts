@@ -24,6 +24,11 @@ export async function getApiKeyByValue(keyValue: string): Promise<ApiKeyRecord |
     where: { key: keyValue },
   });
 }
+export async function getApiKeyById(id: string): Promise<ApiKeyRecord | null> {
+  return prisma.apiKey.findUnique({
+    where: { id },
+  });
+}
 
 export interface CreateApiKeyParams {
   tenantId: string;

@@ -1,5 +1,15 @@
 import { prisma as defaultPrisma, PrismaClientType } from '../db/prisma.js';
 import { logger } from '../config/logger.js';
+type UsageGroup = {
+  apiKeyId: string;
+  _count: { _all: number };
+  _avg: { latencyMs: number | null };
+};
+
+type ErrorGroup = {
+  apiKeyId: string;
+  _count: { _all: number };
+};
 
 let prisma: PrismaClientType = defaultPrisma;
 
@@ -18,6 +28,13 @@ export interface UsageSummary {
   totalRequests: number;
   averageLatencyMs: number | null;
   errorRate: number;
+}
+
+export interface RecentUsageQuery {
+  limit?: number;
+  apiKeyId?: string;
+  since?: Date;
+  statusCodeGte?: number;
 }
 
 export function setPrismaClient(client: PrismaClientType): void {
@@ -51,14 +68,14 @@ export async function getUsageSummary(query: UsageQuery = {}): Promise<UsageSumm
       : {}),
   };
 
-  const grouped = await prisma.apiUsage.groupBy({
+  const grouped: UsageGroup[] = await prisma.apiUsage.groupBy({
     by: ['apiKeyId'],
     where,
     _count: { _all: true },
     _avg: { latencyMs: true },
   });
 
-  const errorCounts = await prisma.apiUsage.groupBy({
+   const errorCounts: ErrorGroup[] = await prisma.apiUsage.groupBy({
     by: ['apiKeyId'],
     where: { ...where, statusCode: { gte: 400 } },
     _count: { _all: true },
@@ -79,5 +96,26 @@ export async function getUsageSummary(query: UsageQuery = {}): Promise<UsageSumm
       averageLatencyMs: group._avg.latencyMs,
       errorRate: total > 0 ? errors / total : 0,
     };
+  });
+}
+
+export async function getRecentUsage(query: RecentUsageQuery = {}): Promise<ApiUsageRecord[]> {
+  const where: any = {
+    ...(query.apiKeyId ? { apiKeyId: query.apiKeyId } : {}),
+    ...(query.since ? { timestamp: { gte: query.since } } : {}),
+    ...(query.statusCodeGte ? { statusCode: { gte: query.statusCodeGte } } : {}),
+  };
+
+  return prisma.apiUsage.findMany({
+    where,
+    orderBy: { timestamp: 'desc' },
+    take: query.limit ?? 50,
+  });
+}
+
+export async function getRecentErrors(query: RecentUsageQuery = {}): Promise<ApiUsageRecord[]> {
+  return getRecentUsage({
+    ...query,
+    statusCodeGte: Math.max(query.statusCodeGte ?? 400, 400),
   });
 }

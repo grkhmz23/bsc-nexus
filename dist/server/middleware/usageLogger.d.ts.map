@@ -1,0 +1,1 @@
+{"version":3,"file":"usageLogger.d.ts","sourceRoot":"","sources":["../../../src/server/middleware/usageLogger.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,QAAQ,EAAE,YAAY,EAAE,MAAM,SAAS,CAAC;AACjD,OAAO,EAAE,oBAAoB,EAAE,MAAM,WAAW,CAAC;AAIjD,wBAAgB,WAAW,CAAC,GAAG,EAAE,oBAAoB,EAAE,GAAG,EAAE,QAAQ,EAAE,IAAI,EAAE,YAAY,GAAG,IAAI,CA0B9F"}
