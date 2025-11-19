@@ -1,26 +1,31 @@
 import { Router, Request, Response } from 'express';
-import { requireAdminToken, createApiKey, listApiKeys, deleteApiKey } from '../middleware/auth.js';
+import { requireAdminToken } from '../middleware/auth.js';
 import { logger } from '../config/logger.js';
+import { createApiKey, listApiKeys, deactivateApiKey } from '../services/apiKeyService.js';
+import { getUsageSummary } from '../services/usageService.js';
 
 const router = Router();
 
 /**
  * GET /admin/api-keys - List all API keys
  */
-router.get('/api-keys', requireAdminToken, (req: Request, res: Response) => {
+router.get('/api-keys', requireAdminToken, async (_req: Request, res: Response) => {
   try {
-    const keys = listApiKeys();
-    
+    const keys = await listApiKeys();
+
     logger.info('Admin: Listed API keys', {
       count: keys.length,
     });
-    
+
     res.json({
-      keys: keys.map(k => ({
-        key: k.key.substring(0, 20) + '...',
-        name: k.name,
+      keys: keys.map((k: any) => ({
+        id: k.id,
+        key: k.key,
+        label: k.label,
+        tenantId: k.tenantId,
+        isActive: k.isActive,
+        rateLimitPerMinute: k.rateLimitPerMinute,
         createdAt: k.createdAt,
-        requestCount: k.requestCount,
       })),
     });
   } catch (error: any) {
@@ -37,28 +42,35 @@ router.get('/api-keys', requireAdminToken, (req: Request, res: Response) => {
 /**
  * POST /admin/api-keys - Create new API key
  */
-router.post('/api-keys', requireAdminToken, (req: Request, res: Response) => {
+router.post('/api-keys', requireAdminToken, async (req: Request, res: Response) => {
   try {
-    const { name } = req.body;
-    
-    if (!name || typeof name !== 'string') {
+    const { tenantId, label, rateLimitPerMinute } = req.body;
+
+    if (!tenantId || typeof tenantId !== 'string') {
       res.status(400).json({
         error: {
           code: 400,
-          message: 'Key name is required',
+          message: 'tenantId is required',
         },
       });
       return;
     }
-    
-    const key = createApiKey(name);
-    
-    logger.info('Admin: Created API key', { name });
-    
+
+    const apiKey = await createApiKey({
+      tenantId,
+      label,
+      rateLimitPerMinute,
+    });
+
+    logger.info('Admin: Created API key', { tenantId, label });
+
     res.json({
-      key,
-      name,
-      createdAt: new Date(),
+      key: apiKey.key,
+      id: apiKey.id,
+      label: apiKey.label,
+      tenantId: apiKey.tenantId,
+      createdAt: apiKey.createdAt,
+      rateLimitPerMinute: apiKey.rateLimitPerMinute,
       message: 'API key created successfully. Save this key - it will not be shown again.',
     });
   } catch (error: any) {
@@ -73,46 +85,61 @@ router.post('/api-keys', requireAdminToken, (req: Request, res: Response) => {
 });
 
 /**
- * DELETE /admin/api-keys/:key - Delete API key
+ * POST /admin/api-keys/:id/deactivate - Deactivate API key
  */
-router.delete('/api-keys/:key', requireAdminToken, (req: Request, res: Response) => {
+router.post('/api-keys/:id/deactivate', requireAdminToken, async (req: Request, res: Response) => {
   try {
-    const { key } = req.params;
-    
-    if (!key) {
+    const { id } = req.params;
+
+    if (!id) {
       res.status(400).json({
         error: {
           code: 400,
-          message: 'Key parameter is required',
+          message: 'Key id parameter is required',
         },
       });
       return;
     }
-    
-    const deleted = deleteApiKey(key);
-    
-    if (!deleted) {
-      res.status(404).json({
-        error: {
-          code: 404,
-          message: 'API key not found',
-        },
-      });
-      return;
-    }
-    
-    logger.info('Admin: Deleted API key', { key: key.substring(0, 20) + '...' });
-    
+
+    await deactivateApiKey(id);
+
+    logger.info('Admin: Deactivated API key', { id });
+
     res.json({
       ok: true,
-      message: 'API key deleted successfully',
+      message: 'API key deactivated successfully',
     });
   } catch (error: any) {
-    logger.error('Failed to delete API key', { error: error.message });
+    logger.error('Failed to deactivate API key', { error: error.message });
     res.status(500).json({
       error: {
         code: 500,
-        message: 'Failed to delete API key',
+        message: 'Failed to deactivate API key',
+      },
+    });
+  }
+});
+
+/**
+ * GET /admin/usage - Usage summary endpoint
+ */
+router.get('/usage', requireAdminToken, async (req: Request, res: Response) => {
+  try {
+    const { apiKeyId, from, to } = req.query;
+
+    const summary = await getUsageSummary({
+      apiKeyId: typeof apiKeyId === 'string' ? apiKeyId : undefined,
+      from: typeof from === 'string' ? new Date(from) : undefined,
+      to: typeof to === 'string' ? new Date(to) : undefined,
+    });
+
+    res.json({ summary });
+  } catch (error: any) {
+    logger.error('Failed to fetch usage summary', { error: error.message });
+    res.status(500).json({
+      error: {
+        code: 500,
+        message: 'Failed to fetch usage summary',
       },
     });
   }

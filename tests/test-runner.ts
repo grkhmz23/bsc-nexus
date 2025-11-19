@@ -8,6 +8,8 @@ import { testWebSocket } from './websocket.js';
 import { testWebhooks } from './webhooks.js';
 import { testSecurity } from './security.js';
 import { testDatabase } from './database.js';
+import { testApiKeyService } from './api-key-service.unit.js';
+import { testUsageLogger } from './usage-logger.unit.js';
 import { TestSummary, TestResult } from './types.js';
 import { saveHTMLReport } from './report-generator.js';
 
@@ -25,6 +27,8 @@ async function runAllTests(): Promise<TestSummary> {
   console.log(chalk.gray(`  Database: ${config.databaseUrl ? 'Configured' : 'Not configured'}\n`));
   
   const testSuites = [
+    { name: 'API Key Service', fn: () => testApiKeyService() },
+    { name: 'Usage Logger', fn: () => testUsageLogger() },
     { name: 'Health Checks', fn: () => testHealth(config) },
     { name: 'RPC Proxy', fn: () => testRPC(config) },
     { name: 'Token API', fn: () => testTokens(config) },
@@ -50,60 +54,50 @@ async function runAllTests(): Promise<TestSummary> {
         if (result.details) {
           console.log(chalk.gray(`     ℹ ${result.details}`));
         }
-        if (result.error) {
-          console.log(chalk.yellow(`     ⚠ Error: ${result.error}`));
-        }
-        if (result.suggestion) {
-          console.log(chalk.cyan(`     💡 Suggestion: ${result.suggestion}`));
-        }
       }
     } catch (error: any) {
-      console.log(chalk.red(`  ❌ Suite failed: ${error.message}`));
+      console.error(chalk.red(`  ❌ ${suite.name} suite failed: ${error.message}`));
+      allResults.push({
+        name: `${suite.name} suite error`,
+        category: suite.name,
+        passed: false,
+        duration: 0,
+        details: error.stack || error.message,
+      });
     }
   }
   
   const duration = Date.now() - startTime;
-  const passed = allResults.filter(r => r.passed).length;
-  const failed = allResults.filter(r => !r.passed).length;
+  const passedCount = allResults.filter(r => r.passed).length;
+  const failedCount = allResults.length - passedCount;
+  
+  console.log('\n' + chalk.gray('─'.repeat(80)));
+  console.log(
+    chalk.bold(
+      failedCount === 0
+        ? chalk.green(`\n✅ All ${allResults.length} tests passed in ${duration}ms\n`)
+        : chalk.red(`\n❌ ${failedCount}/${allResults.length} tests failed in ${duration}ms\n`),
+    ),
+  );
   
   const summary: TestSummary = {
-    total: allResults.length,
-    passed,
-    failed,
-    duration,
-    timestamp: new Date(),
+    totalTests: allResults.length,
+    passedTests: passedCount,
+    failedTests: failedCount,
+    durationMs: duration,
     results: allResults,
   };
   
-  console.log(chalk.gray('\n' + '═'.repeat(80)));
-  console.log(chalk.bold.white('\n📊 Test Summary\n'));
-  console.log(chalk.white(`  Total Tests:  ${summary.total}`));
-  
-  const passRate = summary.total > 0 ? ((passed/summary.total)*100).toFixed(1) : '0.0';
-  const failRate = summary.total > 0 ? ((failed/summary.total)*100).toFixed(1) : '0.0';
-  
-  console.log(chalk.green(`  Passed:       ${summary.passed} (${passRate}%)`));
-  console.log(chalk.red(`  Failed:       ${summary.failed} (${failRate}%)`));
-  console.log(chalk.cyan(`  Duration:     ${(duration/1000).toFixed(2)}s`));
-  
-  if (failed === 0) {
-    console.log(chalk.bold.green('\n🎉 All tests passed! Your BSC Nexus infrastructure is working correctly.\n'));
-  } else {
-    console.log(chalk.bold.yellow('\n⚠️  Some tests failed. Check the suggestions above to fix the issues.\n'));
-  }
-  
-  // Save HTML report
-  saveHTMLReport(summary);
+  await saveHTMLReport(summary);
   
   return summary;
 }
 
-// Run tests
-runAllTests()
-  .then((summary) => {
-    process.exit(summary.failed > 0 ? 1 : 0);
-  })
-  .catch((error) => {
-    console.error(chalk.red('Fatal error:'), error);
+if (require.main === module) {
+  runAllTests().catch(error => {
+    console.error(chalk.red('\nFatal error running tests:'), error);
     process.exit(1);
   });
+}
+
+export { runAllTests };
