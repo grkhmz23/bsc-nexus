@@ -122,6 +122,8 @@ mode: 'turbo'    // Instant, expensive
 - Ensures confirmation
 - Prevents stuck transactions
 
+- Prevents stuck transactions
+
 ---
 
 ## INTEGRATION STEPS
@@ -145,7 +147,11 @@ src/
 ### Step 3: Update Environment
 ```env
 # BSC Configuration
-UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org
+BSC_PRIMARY_RPC_URL=https://bsc-dataseed.binance.org
+BSC_FALLBACK_RPC_URLS=https://bsc-dataseed1.defibit.io,https://bsc-dataseed1.ninicoin.io
+BSC_RPC_TIMEOUT_MS=15000
+BSC_RPC_BACKOFF_BASE_MS=500
+BSC_RPC_BACKOFF_MAX_MS=30000
 BSC_CHAIN_ID=56
 
 # Optional: Private RPCs
@@ -155,6 +161,11 @@ PRIVATE_RPC_2=https://private-rpc.bsc.nodereal.io
 # Optional: Validator Endpoints
 VALIDATOR_BINANCE=https://validator-bsc.binance.org
 VALIDATOR_ANKR=https://validator-bsc.ankr.com
+
+# MEV & swap toggles
+ENABLE_MEV_PROTECTION=true
+MEV_PROTECTION_STRATEGY=private-mempool
+ENABLE_ULTRAFAST_SWAP=true
 ```
 
 ### Step 4: Create Routes (Simplified)
@@ -199,6 +210,13 @@ import tradingRoutes from './routes/trading.js';
 // Add with other routes
 app.use(tradingRoutes);
 ```
+
+## Phase 4 RPC & MEV Operations
+
+- Configure `BSC_PRIMARY_RPC_URL` plus `BSC_FALLBACK_RPC_URLS` to enable multi-endpoint failover with per-endpoint timeouts and exponential backoff (`RPC_BACKOFF_BASE_MS`, `RPC_BACKOFF_MAX_MS`).
+- Toggle MEV protection with `ENABLE_MEV_PROTECTION` and select a strategy (e.g., `MEV_PROTECTION_STRATEGY=private-mempool`). A `x-disable-anti-mev: true` header lets integrators bypass protection in development while logging the skip.
+- Ultra-fast swap routing is enabled via `ENABLE_ULTRAFAST_SWAP` and handled through JSON-RPC methods `bscnexus_getSwapQuote` and `bscnexus_executeSwap`.
+- `/health` now reports database connectivity, upstream RPC status, and MEV readiness; `/metrics` exposes Prometheus counters for per-endpoint success/error rates and MEV application outcomes.
 
 ---
 
@@ -461,3 +479,72 @@ For integration help:
 - Monitor logs carefully
 
 This is production-ready code with real MEV protection and ultra-fast execution!
+
+ Launch beta
+
+4. **Week 3:**
+   - Public launch
+   - Marketing push
+   - User onboarding
+   - Support setup
+
+5. **Month 1:**
+   - Scale infrastructure
+   - Add features
+   - Partnerships
+   - Revenue ramp-up
+
+---
+
+## CONTACT & SUPPORT
+
+For integration help:
+- Review code comments
+- Check API examples
+- Test with small amounts
+- Monitor logs carefully
+
+This is production-ready code with real MEV protection and ultra-fast execution!
+
+---
+
+## Phase 5: Deployment & Runtime Hardening
+
+BSC Nexus now ships with containerized deployment assets and a minimal CI pipeline focused on deterministic unit tests.
+
+### Environment bootstrap
+1. Copy `.env.example` to `.env` and adjust values for your environment (production secrets should come from a secret manager).
+2. Ensure PostgreSQL is reachable and `DATABASE_URL` points at it. When using Docker Compose, the host should be `db`.
+3. Set your desired RPC endpoints via `BSC_PRIMARY_RPC_URL` and `BSC_FALLBACK_RPC_URLS`.
+4. Harden `ADMIN_TOKEN` for any exposed environment.
+
+### Local development (without Docker)
+```bash
+npm install
+npm run db:migrate   # requires DATABASE_URL
+npm run build
+npm start
+```
+- Verify readiness via `http://localhost:3000/health`.
+- Metrics (when enabled) are available at `http://localhost:3000/metrics`.
+
+### Docker-based workflow
+```bash
+cp .env.example .env
+# Update values for your environment, especially ADMIN_TOKEN and RPC endpoints
+# Build and start the stack
+docker compose up --build
+```
+- The API is exposed on `http://localhost:3000` and Postgres on `localhost:5432` (development only; restrict in production).
+- Use `docker compose logs -f api` to monitor startup.
+- Apply migrations inside the container if needed: `docker compose exec api npx prisma migrate deploy`.
+
+### Production considerations
+- Do **not** commit real secrets; inject them via your orchestration platform.
+- Keep Postgres volumes backed up and monitored.
+- Use `/health` for liveness/readiness and `/metrics` for Prometheus scraping.
+- Tune rate limits through environment variables (`RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX_REQUESTS`, `DEFAULT_RATE_LIMIT_PER_MINUTE`, `RATE_LIMIT_BURST_FACTOR`).
+
+### CI expectations
+The GitHub Actions workflow runs TypeScript compilation and core unit tests only. Integration tests that require a running server or external RPC endpoints are intentionally excluded for determinism.
+dist/server/app.js

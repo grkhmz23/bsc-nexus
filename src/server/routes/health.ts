@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { logger } from '../config/logger.js';
 import { config } from '../config/env.js';
 import { getMetrics } from '../services/metrics.js';
+import { prisma } from '../db/prisma.js';
+import { getRpcEndpointHealth } from '../services/rpcProxy.js';
 
 const router = Router();
 
@@ -10,9 +12,26 @@ const router = Router();
  */
 router.get('/health', async (req: Request, res: Response) => {
   try {
+    const databaseStatus = { connected: false as boolean, error: undefined as string | undefined };
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      databaseStatus.connected = true;
+    } catch (dbError: any) {
+      databaseStatus.error = dbError.message;
+    }
+
+    const rpcEndpoints = getRpcEndpointHealth();
+    const rpcHealthy = rpcEndpoints.some(ep => ep.healthy);
+
+    const mevStatus = {
+      enabled: config.mevProtectionEnabled,
+      ready: config.mevProtectionEnabled && !!config.mevProtectionStrategy,
+    };
+
+    const overallOk = databaseStatus.connected && rpcHealthy;
     const health = {
-      ok: true,
-      status: 'healthy',
+      ok: overallOk,
+      status: overallOk ? 'healthy' : 'degraded',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       version: '1.0.0',
@@ -21,6 +40,11 @@ router.get('/health', async (req: Request, res: Response) => {
         metricsEnabled: config.metricsEnabled,
         wsEnabled: config.wsEnabled,
         databaseConfigured: !!config.databaseUrl,
+      },
+      components: {
+        database: databaseStatus,
+        rpc: rpcEndpoints,
+        mev: mevStatus,
       },
     };
     

@@ -12,12 +12,17 @@ export async function testHealth(config: TestConfig): Promise<TestResult[]> {
     });
     
     const passed = response.status === 200 && response.data?.ok === true;
+    const hasComponents = !!response.data?.components;
     results.push({
       name: 'GET /health endpoint',
       category: 'Health Checks',
       passed,
       duration: Date.now() - start1,
-      details: passed ? 'Health check returned { ok: true }' : `Unexpected response: ${JSON.stringify(response.data)}`,
+      details: passed
+        ? hasComponents
+          ? 'Health check returned component statuses'
+          : 'Health check returned { ok: true }'
+        : `Unexpected response: ${JSON.stringify(response.data)}`,
       suggestion: !passed ? 'Ensure database connection is active and server is running' : undefined,
     });
   } catch (error: any) {

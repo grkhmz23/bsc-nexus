@@ -1,66 +1,34 @@
-version: '3.8'
+version: '3.9'
 
 services:
-  # BSC Nexus Backend
-  bsc-nexus:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bsc_nexus
+      POSTGRES_USER: bscnexus
+      POSTGRES_PASSWORD: secretpassword
+    ports:
+      - "5432:5432" # For local development; remove/lock down in production
+    volumes:
+      - bsc_nexus_db_data:/var/lib/postgresql/data
+
+  api:
     build: .
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://bscnexus:secretpassword@db:5432/bsc_nexus
+      BSC_PRIMARY_RPC_URL: https://bsc-dataseed.binance.org
+      BSC_FALLBACK_RPC_URLS: https://bsc-dataseed1.defibit.io,https://bsc-dataseed1.ninicoin.io
+      ADMIN_TOKEN: change-me-in-production
+      METRICS_ENABLED: "true"
     ports:
       - "3000:3000"
-    environment:
-      - NODE_ENV=development
-      - PORT=3000
-      - UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org
-      - ADMIN_TOKEN=dev-admin-token
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/bsc_nexus
-      - ANTI_MEV_ENABLED=false
-      - METRICS_ENABLED=true
-    depends_on:
-      - postgres
-      - redis
-    restart: unless-stopped
-    volumes:
-      - ./src:/app/src
-    networks:
-      - bsc-nexus-network
-
-  # PostgreSQL Database (optional)
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=bsc_nexus
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - bsc-nexus-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Redis (optional - for caching)
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    networks:
-      - bsc-nexus-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
+    # For production use, inject secrets via a secure secret manager or compose overrides
 
 volumes:
-  postgres-data:
-  redis-data:
-
-networks:
-  bsc-nexus-network:
-    driver: bridge
+  bsc_nexus_db_data:

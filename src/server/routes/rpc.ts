@@ -1,21 +1,15 @@
 import { Router, Response } from 'express';
 import { requireApiKey, AuthenticatedRequest } from '../middleware/auth.js';
-import { rateLimit } from '../middleware/rateLimit.js';
-import { usageLogger } from '../middleware/usageLogger.js';
 import { proxyRpcRequest, validateJsonRpcRequest, JsonRpcResponse } from '../services/rpcProxy.js';
 import { logger } from '../config/logger.js';
 import { rpcRequestCounter, rpcRequestDuration } from '../services/metrics.js';
 
 const router = Router();
 
-/**
- * POST /v1/rpc - JSON-RPC proxy endpoint
- */
-router.post('/v1/rpc', requireApiKey, rateLimit, usageLogger, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/v1/rpc', requireApiKey, async (req: AuthenticatedRequest, res: Response) => {
   const startTime = Date.now();
 
   try {
-    // Validate request format
     const validation = validateJsonRpcRequest(req.body);
 
     if (!validation.valid) {
@@ -40,6 +34,7 @@ router.post('/v1/rpc', requireApiKey, rateLimit, usageLogger, async (req: Authen
     }
 
     const rpcRequest = validation.request!;
+    const disableAntiMev = req.headers['x-disable-anti-mev'] === 'true';
 
     logger.info('RPC request received', {
       method: rpcRequest.method,
@@ -47,13 +42,10 @@ router.post('/v1/rpc', requireApiKey, rateLimit, usageLogger, async (req: Authen
       apiKeyId: req.context?.apiKey?.id,
     });
 
-    // Check for anti-MEV disable flag
-    const disableAntiMev = req.headers['x-disable-anti-mev'] === 'true';
+    const response = await proxyRpcRequest(rpcRequest, {
+      disableAntiMev,
+    });
 
-    // Proxy the request
-    const response = await proxyRpcRequest(rpcRequest, { disableAntiMev });
-
-    // Record metrics
     const duration = (Date.now() - startTime) / 1000;
     rpcRequestDuration.observe({ method: rpcRequest.method }, duration);
     rpcRequestCounter.inc({

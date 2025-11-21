@@ -10,7 +10,7 @@ const router = Router();
 /**
  * GET /v1/tokens/:address/info - Get token information
  */
-router.router.get('/v1/tokens/:address/info', requireApiKey, rateLimit, usageLogger, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/v1/tokens/:address/info', requireApiKey, rateLimit, usageLogger, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { address } = req.params;
 
