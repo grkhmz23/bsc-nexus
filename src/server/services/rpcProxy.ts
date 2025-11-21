@@ -1,6 +1,17 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
+import { ethers } from 'ethers';
 import { logger } from '../config/logger.js';
 import { config } from '../config/env.js';
+import {
+  rpcRequestCounter,
+  rpcRequestDuration,
+  rpcUpstreamRequestCounter,
+  rpcUpstreamErrorsCounter,
+  mevProtectionCounter,
+} from './metrics.js';
+import { mevProtectionService } from './mevProtectionService.js';
+import { ultraFastSwapService } from './ultraFastSwapService.js';
+import { RequestContext } from '../middleware/auth.js';
 
 export interface JsonRpcRequest {
   jsonrpc: '2.0';
@@ -18,156 +29,338 @@ export interface JsonRpcResponse {
     message: string;
     data?: any;
   };
+  meta?: Record<string, any>;
 }
 
 interface ProxyOptions {
   disableAntiMev?: boolean;
   timeout?: number;
+  context?: RequestContext;
 }
 
-/**
- * Pick a random RPC URL from the fallback list
- */
-function pickPublicFallback(): string {
-  const list = config.upstreamRpcUrls;
-  if (list.length === 0) {
-    throw new Error('No RPC endpoints configured');
-  }
-  return list[Math.floor(Math.random() * list.length)];
+interface RpcEndpointState {
+  url: string;
+  timeoutMs: number;
+  successCount: number;
+  errorCount: number;
+  consecutiveFailures: number;
+  lastFailureAt?: number;
+  lastSuccessAt?: number;
+  backoffUntil?: number;
 }
 
-/**
- * Generate random delay for anti-MEV
- */
-function randomDelayMs(): number {
-  const min = config.antiMevRandomDelayMin;
-  const max = config.antiMevRandomDelayMax;
-  if (max <= min) return 0;
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+const TRANSACTION_METHODS = ['eth_sendRawTransaction', 'eth_sendTransaction', 'eth_sendBundle'];
+const ULTRAFAST_SWAP_METHODS = ['bscnexus_getSwapQuote', 'bscnexus_executeSwap'];
+
+let rpcEndpoints: RpcEndpointState[] = buildRpcEndpoints();
+let roundRobinIndex = 0;
+
+function buildRpcEndpoints(): RpcEndpointState[] {
+  const urls = Array.from(new Set([config.bscPrimaryRpcUrl, ...config.upstreamRpcUrls]));
+
+  return urls.map(url => ({
+    url,
+    timeoutMs: config.rpcEndpointTimeoutMs,
+    successCount: 0,
+    errorCount: 0,
+    consecutiveFailures: 0,
+  }));
 }
 
-/**
- * Forward JSON-RPC request to upstream
- */
-async function forwardJsonRpc(
-  url: string,
-  body: JsonRpcRequest,
-  timeout: number = 15000
-): Promise<JsonRpcResponse> {
-  try {
-    const response = await axios.post<JsonRpcResponse>(url, body, {
-      timeout,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+export function resetRpcEndpointPool(customUrls?: string[], timeoutMs?: number): void {
+  const urls = customUrls && customUrls.length > 0 ? customUrls : undefined;
+  rpcEndpoints = (urls || []).length > 0
+    ? urls!.map(url => ({
+        url,
+        timeoutMs: timeoutMs || config.rpcEndpointTimeoutMs,
+        successCount: 0,
+        errorCount: 0,
+        consecutiveFailures: 0,
+      }))
+    : buildRpcEndpoints();
+  roundRobinIndex = 0;
+}
+
+function selectEndpoint(): RpcEndpointState | undefined {
+  if (rpcEndpoints.length === 0) return undefined;
+
+  const now = Date.now();
+  const healthy = rpcEndpoints.filter(ep => !ep.backoffUntil || ep.backoffUntil <= now);
+
+  if (healthy.length === 0) {
+    // All endpoints are in backoff; pick the one that will recover soonest
+    return rpcEndpoints.reduce((prev, curr) => {
+      if (!prev.backoffUntil) return prev;
+      if (!curr.backoffUntil) return curr;
+      return prev.backoffUntil <= curr.backoffUntil ? prev : curr;
     });
-    
-    return response.data;
-  } catch (error: any) {
-    if (error.response?.data) {
-      return error.response.data;
+  }
+
+  const endpoint = healthy[roundRobinIndex % healthy.length];
+  roundRobinIndex = (roundRobinIndex + 1) % healthy.length;
+  return endpoint;
+}
+
+function markSuccess(endpoint: RpcEndpointState): void {
+  endpoint.successCount += 1;
+  endpoint.consecutiveFailures = 0;
+  endpoint.lastSuccessAt = Date.now();
+  endpoint.backoffUntil = undefined;
+}
+
+function markFailure(endpoint: RpcEndpointState): void {
+  endpoint.errorCount += 1;
+  endpoint.consecutiveFailures += 1;
+  endpoint.lastFailureAt = Date.now();
+
+  const backoff = Math.min(
+    config.rpcBackoffMaxMs,
+    config.rpcBackoffBaseMs * Math.pow(2, endpoint.consecutiveFailures - 1)
+  );
+  endpoint.backoffUntil = Date.now() + backoff;
+}
+
+function isRetriableError(error: any): boolean {
+  if (!error) return false;
+
+  if (error.code === 'ECONNABORTED') return true;
+  if ((error as AxiosError).response) {
+    const status = (error as AxiosError).response?.status || 0;
+    return status >= 500;
+  }
+
+  return true;
+}
+
+async function forwardJsonRpc(
+  endpoint: RpcEndpointState,
+  body: JsonRpcRequest,
+  timeoutOverride?: number
+): Promise<JsonRpcResponse> {
+  const timeout = timeoutOverride || endpoint.timeoutMs || config.rpcRequestTimeoutMs;
+
+  const response = await axios.post<JsonRpcResponse>(endpoint.url, body, {
+    timeout,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return response.data;
+}
+
+function isTransactionMethod(method: string): boolean {
+  return TRANSACTION_METHODS.includes(method);
+}
+
+function isUltraFastSwapMethod(method: string): boolean {
+  return ULTRAFAST_SWAP_METHODS.includes(method);
+}
+
+export function getRpcEndpointHealth(): Array<
+  Omit<RpcEndpointState, 'timeoutMs'> & { healthy: boolean; timeoutMs: number }
+> {
+  const now = Date.now();
+  return rpcEndpoints.map(endpoint => ({
+    ...endpoint,
+    timeoutMs: endpoint.timeoutMs,
+    healthy: !endpoint.backoffUntil || endpoint.backoffUntil <= now,
+  }));
+}
+
+async function handleUltraFastSwap(rpcRequest: JsonRpcRequest): Promise<JsonRpcResponse> {
+  try {
+    if (!config.ultrafastSwapEnabled) {
+      throw new Error('Ultra-fast swap feature is disabled');
     }
-    throw error;
+
+    if (rpcRequest.method === 'bscnexus_getSwapQuote') {
+      const quote = await ultraFastSwapService.getSwapQuote(rpcRequest.params?.[0]);
+      return { jsonrpc: '2.0', id: rpcRequest.id, result: quote };
+    }
+
+    if (rpcRequest.method === 'bscnexus_executeSwap') {
+      const result = await ultraFastSwapService.executeSwap(rpcRequest.params?.[0]);
+      return { jsonrpc: '2.0', id: rpcRequest.id, result };
+    }
+
+    throw new Error(`Unsupported ultra-fast swap method: ${rpcRequest.method}`);
+  } catch (error: any) {
+    logger.error('Ultra-fast swap handling failed', {
+      method: rpcRequest.method,
+      error: error.message,
+    });
+
+    return {
+      jsonrpc: '2.0',
+      id: rpcRequest.id,
+      error: {
+        code: -32015,
+        message: 'Ultra-fast swap error',
+        data: error.message,
+      },
+    };
+  }
+}
+
+async function applyMevProtection(
+  rpcRequest: JsonRpcRequest,
+  options: ProxyOptions
+): Promise<JsonRpcResponse | null> {
+  if (!isTransactionMethod(rpcRequest.method)) return null;
+  if (!config.mevProtectionEnabled) return null;
+  if (options.disableAntiMev) {
+    mevProtectionCounter.inc({ action: 'skipped' });
+    logger.info('MEV protection explicitly disabled for request', {
+      id: rpcRequest.id,
+      method: rpcRequest.method,
+    });
+    return null;
+  }
+
+  const rawTx = rpcRequest.params?.[0];
+  if (typeof rawTx !== 'string') {
+    return {
+      jsonrpc: '2.0',
+      id: rpcRequest.id,
+      error: {
+        code: -32602,
+        message: 'Invalid params for transaction submission',
+      },
+    };
+  }
+
+  try {
+    let parsedTx: any;
+    try {
+      parsedTx = ethers.Transaction.from(rawTx);
+    } catch {
+      parsedTx = { raw: rawTx };
+    }
+
+    const mevConfig = {
+      enabled: true,
+      strategy: config.mevProtectionStrategy,
+      priorityLevel: 'high' as const,
+      maxBribeTip: config.mevProtectionMaxTip,
+      minConfidenceScore: config.mevProtectionMinConfidence,
+      targetValidators: config.mevProtectionValidators,
+    };
+
+    const outcome = await mevProtectionService.protectTransaction(parsedTx as any, mevConfig);
+    mevProtectionCounter.inc({ action: 'applied' });
+
+    logger.info('MEV protection applied to transaction', {
+      method: rpcRequest.method,
+      id: rpcRequest.id,
+      strategy: mevConfig.strategy,
+      apiKeyId: options.context?.apiKey?.id,
+    });
+
+    return {
+      jsonrpc: '2.0',
+      id: rpcRequest.id,
+      result: outcome.txHash,
+      meta: { protection: outcome.protection },
+    };
+  } catch (error: any) {
+    mevProtectionCounter.inc({ action: 'rejected' });
+    logger.warn('MEV protection failed or rejected transaction', {
+      error: error.message,
+      method: rpcRequest.method,
+    });
+
+    return {
+      jsonrpc: '2.0',
+      id: rpcRequest.id,
+      error: {
+        code: -32010,
+        message: 'MEV protection rejected transaction',
+        data: error.message,
+      },
+    };
   }
 }
 
 /**
- * Main RPC proxy function with Anti-MEV support
+ * Main RPC proxy function with failover and MEV support
  */
 export async function proxyRpcRequest(
   request: JsonRpcRequest,
   options: ProxyOptions = {}
 ): Promise<JsonRpcResponse> {
-  const isSendRawTransaction = request.method === 'eth_sendRawTransaction';
-  const timeout = options.timeout || 15000;
-  
-  // Anti-MEV routing for raw transactions
-  if (
-    config.antiMevEnabled &&
-    isSendRawTransaction &&
-    !options.disableAntiMev &&
-    config.privateRelayUrl
-  ) {
-    logger.info('Routing transaction through Anti-MEV path', {
-      method: request.method,
-      id: request.id,
-    });
-    
-    // Apply random delay
-    const delay = randomDelayMs();
-    if (delay > 0) {
-      await new Promise(resolve => setTimeout(resolve, delay));
-      logger.debug('Applied Anti-MEV delay', { delayMs: delay });
-    }
-    
-    // Try private relay first
+  if (isUltraFastSwapMethod(request.method)) {
+    return handleUltraFastSwap(request);
+  }
+
+  const mevResponse = await applyMevProtection(request, options);
+  if (mevResponse) {
+    return mevResponse;
+  }
+
+  const attempts: string[] = [];
+
+  while (attempts.length < rpcEndpoints.length) {
+    const endpoint = selectEndpoint();
+    if (!endpoint) break;
+
+    attempts.push(endpoint.url);
+    const attemptStart = Date.now();
+
     try {
-      const relayResponse = await forwardJsonRpc(config.privateRelayUrl, request, timeout);
-      logger.info('Transaction sent via private relay', {
+      logger.debug('Forwarding RPC request to upstream', {
+        method: request.method,
         id: request.id,
-        hasResult: !!relayResponse.result,
+        endpoint: endpoint.url,
       });
-      return relayResponse;
-    } catch (relayError: any) {
-      logger.warn('Private relay failed', {
-        error: relayError.message,
+
+      const response = await forwardJsonRpc(endpoint, request, options.timeout || config.rpcRequestTimeoutMs);
+      markSuccess(endpoint);
+
+      const duration = (Date.now() - attemptStart) / 1000;
+      rpcUpstreamRequestCounter.inc({ endpoint: endpoint.url, status: 'success' });
+      rpcRequestDuration.observe({ method: request.method }, duration);
+      rpcRequestCounter.inc({ method: request.method, status: response.error ? 'error' : 'success' });
+
+      logger.info('RPC request completed', {
+        method: request.method,
         id: request.id,
+        endpoint: endpoint.url,
+        attempts: attempts.length,
+        duration: `${duration.toFixed(3)}s`,
+        hasError: !!response.error,
       });
-      
-      // Hard fail if configured
-      if (config.antiMevHardFailOnRelayError) {
-        return {
-          jsonrpc: '2.0',
-          id: request.id,
-          error: {
-            code: -32001,
-            message: 'Private relay unavailable',
-            data: relayError.message,
-          },
-        };
+
+      return { ...response, meta: { endpoint: endpoint.url, attempts: attempts.length } };
+    } catch (error: any) {
+      markFailure(endpoint);
+      rpcUpstreamErrorsCounter.inc({ endpoint: endpoint.url });
+
+      logger.warn('RPC upstream call failed', {
+        method: request.method,
+        id: request.id,
+        endpoint: endpoint.url,
+        attempts: attempts.length,
+        error: error.message,
+      });
+
+      if (!isRetriableError(error)) {
+        break;
       }
-      
-      // Fallback to public RPC
-      logger.info('Falling back to public RPC', { id: request.id });
     }
   }
-  
-  // Standard routing (or fallback from Anti-MEV)
-  const rpcUrl = config.upstreamRpcUrl || pickPublicFallback();
-  
-  try {
-    logger.debug('Forwarding to upstream RPC', {
-      method: request.method,
-      id: request.id,
-      url: rpcUrl,
-    });
-    
-    const response = await forwardJsonRpc(rpcUrl, request, timeout);
-    
-    logger.debug('RPC response received', {
-      id: request.id,
-      hasResult: !!response.result,
-      hasError: !!response.error,
-    });
-    
-    return response;
-  } catch (error: any) {
-    logger.error('RPC request failed', {
-      error: error.message,
-      method: request.method,
-      id: request.id,
-    });
-    
-    return {
-      jsonrpc: '2.0',
-      id: request.id,
-      error: {
-        code: -32603,
-        message: 'Upstream RPC error',
-        data: error.message,
-      },
-    };
-  }
+
+  rpcRequestCounter.inc({ method: request.method, status: 'error' });
+
+  return {
+    jsonrpc: '2.0',
+    id: request.id,
+    error: {
+      code: -32603,
+      message: 'All upstream RPC endpoints failed',
+      data: { attempts },
+    },
+  };
 }
 
 /**
@@ -181,19 +374,19 @@ export function validateJsonRpcRequest(body: any): {
   if (!body || typeof body !== 'object') {
     return { valid: false, error: 'Request body must be a JSON object' };
   }
-  
+
   if (body.jsonrpc !== '2.0') {
     return { valid: false, error: 'jsonrpc must be "2.0"' };
   }
-  
+
   if (!body.method || typeof body.method !== 'string') {
     return { valid: false, error: 'method must be a string' };
   }
-  
+
   if (!Array.isArray(body.params)) {
     return { valid: false, error: 'params must be an array' };
   }
-  
+
   return {
     valid: true,
     request: body as JsonRpcRequest,

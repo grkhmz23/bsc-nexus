@@ -43,7 +43,7 @@ export function setPrismaClient(client: PrismaClientType): void {
 
 export async function logApiUsage(entry: Omit<ApiUsageRecord, 'id'>): Promise<void> {
   try {
-    await prisma.apiUsage.create({ data: entry });
+       await prisma.apiUsage.create({ data: entry });
   } catch (error) {
     logger.error('Failed to log API usage', { error });
   }
@@ -68,18 +68,18 @@ export async function getUsageSummary(query: UsageQuery = {}): Promise<UsageSumm
       : {}),
   };
 
-  const grouped: UsageGroup[] = await prisma.apiUsage.groupBy({
+  const grouped = (await prisma.apiUsage.groupBy({
     by: ['apiKeyId'],
     where,
     _count: { _all: true },
     _avg: { latencyMs: true },
-  });
+  })) as unknown as UsageGroup[];
 
-   const errorCounts: ErrorGroup[] = await prisma.apiUsage.groupBy({
+  const errorCounts = (await prisma.apiUsage.groupBy({
     by: ['apiKeyId'],
     where: { ...where, statusCode: { gte: 400 } },
     _count: { _all: true },
-  });
+  })) as unknown as ErrorGroup[];
 
   const errorLookup = new Map<string, number>();
   for (const group of errorCounts) {

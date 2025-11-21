@@ -93,4 +93,20 @@ export function checkAndConsume(apiKeyId: string, limit: RateLimitConfig, now = 
   };
 }
 
-export function getUsageSnapshot(apiKeyId: string, limit:
+export function getUsageSnapshot(apiKeyId: string, limit: RateLimitConfig, now = Date.now()): RateLimitResult {
+  const bucket = getOrCreateBucket(apiKeyId, now);
+  const maxRequests = getMaxRequests(limit);
+  const resetAt = new Date(bucket.windowStart + WINDOW_MS);
+
+  return {
+    allowed: bucket.count < maxRequests,
+    remaining: Math.max(0, maxRequests - bucket.count),
+    resetAt,
+    currentCount: bucket.count,
+  };
+}
+
+export function resetRateLimitState(): void {
+  rateLimitBuckets.clear();
+  logger.info('Rate limit state reset');
+}
