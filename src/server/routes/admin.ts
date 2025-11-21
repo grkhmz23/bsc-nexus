@@ -90,20 +90,47 @@ router.post('/api-keys', requireAdminToken, async (req: Request, res: Response) 
   try {
     const { tenantId, label, rateLimitPerMinute } = req.body;
 
+    // Validate tenantId
     if (!tenantId || typeof tenantId !== 'string') {
       res.status(400).json({
         error: {
           code: 400,
-          message: 'tenantId is required',
+          message: 'Valid tenantId string is required',
         },
       });
       return;
     }
 
+    // Validate label if provided
+    if (label !== undefined && typeof label !== 'string') {
+      res.status(400).json({
+        error: {
+          code: 400,
+          message: 'Label must be a string',
+        },
+      });
+      return;
+    }
+
+    // Validate rate limit if provided
+    if (rateLimitPerMinute !== undefined) {
+      if (typeof rateLimitPerMinute !== 'number' || 
+          rateLimitPerMinute < 1 || 
+          rateLimitPerMinute > 10000) {
+        res.status(400).json({
+          error: {
+            code: 400,
+            message: 'Rate limit must be a number between 1 and 10000',
+          },
+        });
+        return;
+      }
+    }
+
     const apiKey = await createApiKey({
       tenantId,
-      label,
-      rateLimitPerMinute,
+      label: label || undefined,
+      rateLimitPerMinute: rateLimitPerMinute || undefined,
     });
 
     logger.info('Admin: Created API key', { tenantId, label });

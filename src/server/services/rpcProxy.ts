@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import { ethers } from 'ethers';
+import Web3 from 'web3';
 import { logger } from '../config/logger.js';
 import { config } from '../config/env.js';
 import {
@@ -56,7 +56,7 @@ let rpcEndpoints: RpcEndpointState[] = buildRpcEndpoints();
 let roundRobinIndex = 0;
 
 function buildRpcEndpoints(): RpcEndpointState[] {
-  const urls = Array.from(new Set([config.bscPrimaryRpcUrl, ...config.upstreamRpcUrls]));
+  const urls = Array.from(new Set([config.bscPrimaryRpcUrl, ...config.bscFallbackRpcUrls].filter(Boolean)));
 
   return urls.map(url => ({
     url,
@@ -233,8 +233,11 @@ async function applyMevProtection(
   try {
     let parsedTx: any;
     try {
-      parsedTx = ethers.Transaction.from(rawTx);
+      // Attempt to decode the raw transaction hex
+      const web3 = new Web3();
+      parsedTx = web3.eth.accounts.signTransaction.decode(rawTx);
     } catch {
+      // If decoding fails, just pass the raw tx
       parsedTx = { raw: rawTx };
     }
 
@@ -364,31 +367,58 @@ export async function proxyRpcRequest(
 }
 
 /**
- * Validate JSON-RPC request format
+ * Validate JSON-RPC request format with security checks
  */
 export function validateJsonRpcRequest(body: any): {
   valid: boolean;
   error?: string;
   request?: JsonRpcRequest;
 } {
+  // Check if body exists
   if (!body || typeof body !== 'object') {
     return { valid: false, error: 'Request body must be a JSON object' };
   }
 
+  // Check JSON-RPC version
   if (body.jsonrpc !== '2.0') {
-    return { valid: false, error: 'jsonrpc must be "2.0"' };
+    return { valid: false, error: 'Invalid JSON-RPC version, must be "2.0"' };
   }
 
-  if (!body.method || typeof body.method !== 'string') {
-    return { valid: false, error: 'method must be a string' };
+  // Check method
+  if (typeof body.method !== 'string' || body.method.length === 0) {
+    return { valid: false, error: 'Method must be a non-empty string' };
   }
 
-  if (!Array.isArray(body.params)) {
-    return { valid: false, error: 'params must be an array' };
+  // Sanitize method name to prevent injection
+  if (!/^[a-zA-Z0-9_]+$/.test(body.method)) {
+    return { valid: false, error: 'Invalid method name format' };
+  }
+
+  // Check id (can be number, string, or null)
+  if (body.id !== undefined && body.id !== null) {
+    if (typeof body.id !== 'number' && typeof body.id !== 'string') {
+      return { valid: false, error: 'ID must be a number, string, or null' };
+    }
+  }
+
+  // Check params (optional, but must be array if present)
+  if (body.params !== undefined) {
+    if (!Array.isArray(body.params)) {
+      return { valid: false, error: 'Params must be an array' };
+    }
+    // Limit params array size to prevent DoS
+    if (body.params.length > 100) {
+      return { valid: false, error: 'Too many parameters (max 100)' };
+    }
   }
 
   return {
     valid: true,
-    request: body as JsonRpcRequest,
+    request: {
+      jsonrpc: '2.0',
+      id: body.id ?? null,
+      method: body.method,
+      params: body.params ?? [],
+    },
   };
 }
