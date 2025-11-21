@@ -1,375 +1,324 @@
 # BSC Nexus
 
-Enterprise-grade RPC infrastructure for Binance Smart Chain with built-in anti-MEV protection, authentication, and comprehensive monitoring.
+Enterprise-grade RPC and trading infrastructure for Binance Smart Chain (BSC), focused on anti-MEV protection, authenticated access, and structured observability.
 
-![Build Status](https://github.com/grkhmz23/bsc-nexus/workflows/Build%20and%20Test/badge.svg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+> **Status:** Active development (alpha) – not yet production-ready.  
+> Interfaces, schemas, and behavior may change frequently.
+
+---
 
 ## Overview
 
-BSC Nexus is a production-ready backend platform that provides secure and scalable JSON-RPC proxy services for Binance Smart Chain. It includes API key authentication, rate limiting, token information endpoints, and Prometheus metrics for monitoring.
+BSC Nexus is a TypeScript/Node.js backend that aims to provide a secure, scalable JSON-RPC proxy and trading infrastructure layer for Binance Smart Chain.
+
+The current repository focuses on:
+
+- A clean, **service-oriented backend skeleton** in TypeScript
+- **API key management** and **usage logging** services
+- **Rate limiting** and request middleware wiring
+- **PostgreSQL + Prisma** as the persistence layer
+- A unified **test and validation harness** to keep the codebase deployable and consistent
+
+This codebase is the foundation for a future production system; it is suitable today for local development, experimentation, and extension, but should not yet be considered a finished production product.
+
+---
 
 ## Features
 
-### Core Infrastructure (Production Ready)
+### Implemented (current alpha)
 
-- **JSON-RPC Proxy** - High-performance request forwarding to BSC mainnet nodes
-- **Anti-MEV Routing** - Smart routing to protect against MEV attacks
-- **Token Information API** - Query BEP-20 token metadata (name, symbol, decimals)
-- **API Authentication** - API key-based access control with usage tracking
-- **Health Monitoring** - Comprehensive health checks and uptime monitoring
-- **Metrics Collection** - Prometheus-compatible metrics endpoint
-- **Rate Limiting** - Request throttling and abuse prevention
-- **Docker Support** - Full containerization with Docker Compose
+- **TypeScript backend architecture**
+  - Node.js 18+, ESM, `tsx` for local development
+  - Express-based HTTP server and routing
+- **Configuration & environment management**
+  - Centralized env loading with `.env` / `.env.example`
+  - Typed configuration layer for server, database, and RPC settings
+- **API key service**
+  - Create, look up, list, and deactivate API keys (via Prisma + PostgreSQL)
+  - Unit tests covering core behaviors
+- **Usage logging**
+  - Usage logger service to record API requests for metering and analytics
+- **Rate limiting**
+  - Express rate limit middleware to control abusive traffic
+- **Persistence layer**
+  - Prisma ORM with migrations and schema for core entities
+  - PostgreSQL as primary data store
+- **Logging**
+  - Winston-based structured logging
+- **Validation harness**
+  - `validate.mjs` script to run build + tests + basic repository checks in one command:
+    - TypeScript build
+    - QA test runner
+    - Presence of key files (docs, env templates, tests, etc.)
 
-### Planned Features
+### Roadmap (planned / in progress)
 
-- GraphQL API interface
-- WebSocket real-time subscriptions
-- Webhook notification system
-- PostgreSQL database integration
-- Advanced analytics dashboard
+These are target capabilities for future phases; they are **not** fully implemented yet:
 
-## Test Coverage
+- **JSON-RPC proxy layer**
+  - Forwarding to one or more upstream BSC RPC providers
+  - Failover strategies and health-aware routing
+- **Anti-MEV routing**
+  - Policies and heuristics to avoid known MEV patterns
+  - Smart selection of upstreams for sensitive methods
+- **Extended telemetry**
+  - Prometheus metrics for RPC calls, errors, latencies, and rate limits
+  - Dashboards via Grafana (out of scope of this repo, but supported by metrics)
+- **WebSocket infrastructure**
+  - Real-time subscriptions for blocks, logs, and events
+- **Token and chain data services**
+  - Token metadata and cached lookups for common BEP-20 contracts
+- **Deployment tooling**
+  - Hardened Docker images and deployment recipes for cloud environments
 
-Current status: **10 out of 10 tests passing (100%)**
+---
 
-- Health Checks: 2/2 passing
-- RPC Proxy: 2/2 passing
-- Token API: 1/1 passing
-- Security & Authentication: 5/5 passing
+## Tech Stack
 
-Automated testing runs on every push using GitHub Actions, testing against Node.js 18.x and 20.x.
+- **Runtime:** Node.js 18+
+- **Language:** TypeScript
+- **Web framework:** Express
+- **Database:** PostgreSQL
+- **ORM:** Prisma
+- **Logging:** Winston
+- **Metrics:** prom-client (Prometheus-compatible), planned integration
+- **RPC tooling:** web3.js
+- **WebSockets:** ws
+- **Tooling:** tsx, TypeScript compiler, npm scripts
 
-## Quick Start
+---
 
-### Prerequisites
+## Project Status & Tests
 
-- Node.js 18 or higher
-- npm or yarn
-- Optional: Docker and Docker Compose
-
-### Installation
+The repository includes a consolidated validation script:
 
 ```bash
+npm run validate
+This runs:
+
+TypeScript build: npm run build
+
+QA test runner: npm test
+
+Structural checks (presence of key folders/files, docs, env template, etc.)
+
+A successful output similar to the following indicates the repo is in a healthy state for development:
+BSC Nexus Validation
+
+==================================================
+
+[OK] TypeScript build (npm run build)
+[OK] QA test runner (npx tsx tests/test-runner.ts)
+[OK] package.json present
+[OK] .env.example present
+[OK] Core source files present
+[OK] Test files present
+[OK] Documentation present
+
+--------------------------------------------------
+
+All 7 checks passed.
+
+BSC Nexus appears ready for deployment.
+
+Next steps:
+1. Configure your .env file
+2. Set up PostgreSQL database
+3. Run: npm run db:migrate
+4. Start: npm start
+
+Getting Started
+Prerequisites
+
+Node.js 18+
+
+npm 9+
+
+PostgreSQL (local, Docker, or managed)
+
+Git
+
+1. Clone and install
 git clone https://github.com/grkhmz23/bsc-nexus.git
 cd bsc-nexus
 npm install
-```
 
-### Configuration
+2. Configure environment
 
-Copy the example environment file and configure it:
-
-```bash
+Copy the example environment file:
 cp .env.example .env
-```
 
-Edit `.env` with your settings:
+Then edit .env and set at least:
 
-```env
+Server
 PORT=3000
-NODE_ENV=production
-UPSTREAM_RPC_URL=https://bsc-dataseed.binance.org
-ADMIN_TOKEN=your-secure-admin-token
-```
+NODE_ENV=development
 
-### Running the Server
+Database
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DBNAME
 
-Development mode with hot reload:
-```bash
+Upstream RPC(s) (for future/proxy functionality)
+BSC_RPC_URL=https://your-bsc-rpc-or-testnet-url
+# or equivalent, depending on env config
+
+For the authoritative list of variables and their meanings, check:
+
+.env.example
+
+src/server/config (environment/config loader)
+
+3. Start PostgreSQL
+
+Example with Docker:
+docker run --name bsc-nexus-db \
+  -e POSTGRES_USER=bscnexus \
+  -e POSTGRES_PASSWORD=strongpassword \
+  -e POSTGRES_DB=bscnexus \
+  -p 5432:5432 \
+  -d postgres:16
+
+Update DATABASE_URL in .env to match:
+DATABASE_URL=postgresql://bscnexus:strongpassword@localhost:5432/bscnexus
+
+4. Run database migrations
+npm run db:migrate
+
+This applies the Prisma schema and creates the necessary tables.
+
+Running the Server
+Development mode
 npm run dev
-```
+# or
+npm run start:dev
 
-Production mode:
-```bash
+This uses tsx to run the TypeScript sources directly. It is appropriate for local development and debugging.
+
+Production-style run
+
+Compile TypeScript to JavaScript:
 npm run build
+
+Then start the compiled server:
 npm start
-```
 
-Using Docker:
-```bash
-docker-compose up -d
-```
+By default, this will run dist/server/server.js (see package.json for details).
+Testing & Validation
 
-## API Documentation
-
-### Health and Monitoring
-
-**Health Check** (public endpoint)
-```bash
-curl http://localhost:3000/health
-```
-
-Response:
-```json
-{
-  "ok": true,
-  "status": "healthy",
-  "timestamp": "2025-11-12T22:30:00.000Z",
-  "uptime": 3600
-}
-```
-
-**Metrics Endpoint** (public endpoint)
-```bash
-curl http://localhost:3000/metrics
-```
-
-Returns Prometheus-format metrics including RPC request counts, latencies, and Node.js runtime metrics.
-
-### JSON-RPC Proxy
-
-All RPC requests require an API key via the `x-api-key` header.
-
-**Get Latest Block Number**
-```bash
-curl -X POST http://localhost:3000/v1/rpc \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: your-api-key" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "eth_blockNumber",
-    "params": []
-  }'
-```
-
-**Get Chain ID**
-```bash
-curl -X POST http://localhost:3000/v1/rpc \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: your-api-key" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "eth_chainId",
-    "params": []
-  }'
-```
-
-### Token Information API
-
-**Get Token Metadata**
-```bash
-curl http://localhost:3000/v1/tokens/0xe9e7cea3dedca5984780bafc599bd69add087d56/info \
-  -H "x-api-key: your-api-key"
-```
-
-Response:
-```json
-{
-  "address": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
-  "name": "BUSD Token",
-  "symbol": "BUSD",
-  "decimals": 18
-}
-```
-
-### Admin Endpoints
-
-Admin endpoints require an admin token via the `x-admin-token` header.
-
-**Create API Key**
-```bash
-curl -X POST http://localhost:3000/admin/api-keys \
-  -H "Content-Type: application/json" \
-  -H "x-admin-token: your-admin-token" \
-  -d '{"name": "Client Name"}'
-```
-
-**List API Keys**
-```bash
-curl http://localhost:3000/admin/api-keys \
-  -H "x-admin-token: your-admin-token"
-```
-
-**Delete API Key**
-```bash
-curl -X DELETE http://localhost:3000/admin/api-keys/key-to-delete \
-  -H "x-admin-token: your-admin-token"
-```
-
-## Testing
-
-Run the complete test suite:
-```bash
+Run the main test suite:
 npm test
-```
 
-Build the TypeScript code:
-```bash
+Run TypeScript build only:
 npm run build
-```
 
-Run with development server:
-```bash
-npm run dev
-```
+Run full validation (build + tests + structural checks):
+npm run validate
 
-After running tests, a detailed HTML report is generated at `test-report.html`.
+Project Structure
 
-## Project Structure
-
-```
+High-level layout (may evolve as the project grows):
 bsc-nexus/
-├── .github/
-│   └── workflows/
-│       └── build.yml           # CI/CD pipeline
 ├── src/
 │   └── server/
-│       ├── config/             # Configuration and environment
-│       ├── middleware/         # Authentication and error handling
-│       ├── routes/             # API route handlers
-│       └── services/           # Business logic and external calls
-├── tests/                      # Automated test suite
-│   ├── health.ts
-│   ├── rpc.ts
-│   ├── tokens.ts
-│   ├── security.ts
+│       ├── config/       # Env/config loading, shared configuration
+│       ├── middleware/   # Auth, rate limiters, logging, error handling
+│       ├── routes/       # HTTP routes (health, admin, RPC proxy, etc.)
+│       └── services/     # Core domain services (API keys, usage, RPC, MEV)
+├── tests/                # QA test suite + test runner
 │   └── test-runner.ts
-├── .env.example                # Environment variables template
-├── Dockerfile                  # Container configuration
-├── docker-compose.yml          # Multi-service setup
-├── package.json                # Node.js dependencies
-├── tsconfig.json               # TypeScript configuration
+├── prisma/               # Prisma schema and migrations
+├── dist/                 # Compiled JS output (after build)
+├── .env.example          # Environment template
+├── validate.mjs          # Project validation script
+├── package.json          # Dependencies and npm scripts
+├── tsconfig.json         # TypeScript configuration
 └── README.md
-```
 
-## Deployment
+Some elements (routes, services) are scaffolds or early implementations and will expand as the project matures.
 
-### Using Docker
+Deployment
 
-The simplest deployment method is using Docker Compose:
+At this stage the project is primarily intended for:
 
-```bash
-docker-compose up -d
-```
+Local development
 
-View logs:
-```bash
-docker-compose logs -f
-```
+Internal testing
 
-Stop services:
-```bash
-docker-compose down
-```
+Iteration on architecture and services
 
-### Cloud Platforms
+You can still deploy it to a server or container platform if needed:
 
-**Railway**
-```bash
-railway up
-```
+Ensure:
 
-**Render**
+DATABASE_URL points to a reachable PostgreSQL instance
 
-Connect your repository in the Render dashboard and it will automatically detect the Dockerfile.
+Upstream RPC URLs are configured in .env
 
-**DigitalOcean App Platform**
-
-Use the App Platform interface to connect your GitHub repository. The platform will automatically build and deploy using the provided Dockerfile.
-
-### Environment Variables for Production
-
-Required environment variables:
-- `UPSTREAM_RPC_URL` - BSC RPC endpoint
-- `ADMIN_TOKEN` - Admin authentication token
-- `NODE_ENV` - Set to "production"
-- `PORT` - Usually auto-configured by the platform
-
-Optional:
-- `API_KEYS` - Pre-configured API keys (format: key1:name1,key2:name2)
-
-## Security
-
-The platform implements several security measures:
-
-- API key authentication for all protected endpoints
-- Admin token requirement for management operations
-- Rate limiting on all endpoints
-- Security headers via Helmet.js
-- CORS configuration
-- Request validation
-- Error handling that prevents information disclosure
-
-## Monitoring
-
-Prometheus metrics are available at `/metrics` and include:
-
-- `rpc_requests_total` - Total RPC requests by method and status
-- `rpc_request_duration_seconds` - RPC request latency histogram
-- Standard Node.js runtime metrics
-- HTTP request metrics
-
-Integrate with Prometheus and Grafana for visualization and alerting.
-
-## Development
-
-Install dependencies:
-```bash
-npm install
-```
-
-Run in development mode with hot reload:
-```bash
-npm run dev
-```
-
-Build TypeScript:
-```bash
+Build and start:
 npm run build
-```
+npm start
 
-Run tests:
-```bash
-npm test
-```
+Optionally integrate with:
 
-Type checking:
-```bash
-npx tsc --noEmit
-```
+Docker (using a Dockerfile if present or your own Docker setup)
 
-## Documentation
+Managed Postgres (e.g., Railway, Supabase, Render, etc.)
 
-Additional documentation is available in the repository:
+As anti-MEV routing and advanced RPC proxy features are implemented, additional deployment guidance will be added.
 
-- Quick Start Guide - Get up and running in minutes
-- API Reference - Complete endpoint documentation
-- Anti-MEV Design - Technical details on MEV protection
-- Developer Integration Guide - Integration examples and best practices
+Roadmap
 
-## Roadmap
+Planned phases (high-level):
 
-### Current Release (Phase 1)
-- Core RPC proxy functionality
-- Anti-MEV routing
-- API authentication system
-- Prometheus metrics
-- Docker deployment support
-- Comprehensive test coverage
+Phase 1 – Core Infrastructure (current focus)
 
-### Next Release (Phase 2)
-- GraphQL API interface
-- WebSocket real-time subscriptions
-- PostgreSQL database integration
-- Advanced analytics dashboard
-- Multi-chain support (Ethereum, Polygon)
+Stable server architecture in TypeScript
 
-## Contributing
+API key and usage services
 
-Contributions are welcome. Please submit pull requests or open issues for bugs and feature requests.
+Prisma schema & migrations
 
-## License
+Rate limiting and logging
+
+Basic health endpoints and validation tooling
+
+Phase 2 – RPC & Anti-MEV
+
+JSON-RPC proxy layer
+
+Multi-upstream routing and failover
+
+Initial anti-MEV strategies
+
+Prometheus metrics and dashboards
+
+Phase 3 – Advanced Features
+
+WebSockets and event subscriptions
+
+Token metadata and chain data APIs
+
+Advanced analytics and admin panel
+
+Hardened Docker and cloud deployment recipes
+
+Contributing
+
+Contributions, issue reports, and suggestions are welcome:
+
+Open an issue for bugs or feature requests
+
+Submit a pull request for improvements
+
+Use the test runner and npm run validate before submitting changes
+
+License
 
 This project is licensed under the MIT License. See the LICENSE file for details.
 
-## Support
+Support & Contact
 
-For questions or issues:
-- Open an issue on GitHub
-- Repository: https://github.com/grkhmz23/bsc-nexus
+For questions or discussions:
 
+Open an issue on GitHub
 
+Repository: https://github.com/grkhmz23/bsc-nexus
